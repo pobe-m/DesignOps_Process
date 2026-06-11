@@ -1,0 +1,106 @@
+# CLAUDE.md
+# วางไฟล์นี้ที่ root ของ project ที่จะใช้ tor-to-brief skill
+
+## Commands
+
+### `/generate-prototype`
+Generate Next.js POC screens from `design-first-draft.md`.  
+Full spec: `.claude/skills/tor-to-brief/commands/generate-prototype.md`
+
+```bash
+/generate-prototype            # แสดง Screen Inventory แล้วถามว่าจะทำ screen ไหน
+/generate-prototype --screen login
+/generate-prototype --screen login,booking,dashboard
+/generate-prototype --all      # generate ทุก screen เรียงตาม priority
+```
+
+**brand.config.json** (optional) — วางที่ project root เพื่อ override neutral theme:
+```json
+{
+  "project_name": "My App",
+  "primary":   "oklch(0.35 0.18 264)",
+  "radius":    "0.5rem",
+  "font_sans": "\"Noto Sans Thai\", sans-serif"
+}
+```
+
+---
+
+## Skills
+
+### tor-to-brief
+แปลง TOR → design brief → first draft โดยอัตโนมัติ
+
+**Skill location:** `.claude/skills/tor-to-brief/`
+
+**Trigger ด้วยคำสั่ง:**
+```bash
+bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh [flags]
+```
+
+**Flags:**
+| Flag | ความหมาย | ตัวอย่าง |
+|------|-----------|---------|
+| `--tor <path>` | ไฟล์ TOR (PDF หรือ DOCX) | `--tor docs/tor.pdf` |
+| `--tor-text "<text>"` | ข้อความ TOR โดยตรง | `--tor-text "..."` |
+| `--ds <path>` | design system folder หรือ GitHub URL | `--ds ./design-system` |
+| `--brief <path>` | ใช้ brief.json ที่มีอยู่ข้าม step 1+2 | `--brief output/brief.json` |
+| `--out <dir>` | output directory (default: `./tor-output`) | `--out ./output` |
+
+**Environment variable:**
+```bash
+export TOR_OUTPUT_DIR=./output   # กำหนด default output dir
+```
+
+## Common commands
+
+```bash
+# Full pipeline — อ่าน TOR + build draft จาก design system
+bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh \
+  --tor docs/tor.pdf \
+  --ds  ./design-system \
+  --out ./output
+
+# Step 1+2 เท่านั้น — ยังไม่มี design system
+bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh \
+  --tor docs/tor.pdf \
+  --out ./output
+
+# Step 3 เท่านั้น — มี brief.json อยู่แล้ว
+bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh \
+  --brief ./output/brief.json \
+  --ds    ./design-system \
+  --out   ./output
+
+# Validate brief.json โดยไม่รัน pipeline
+python3 .claude/skills/tor-to-brief/scripts/validate_brief.py ./output/brief.json
+```
+
+## Output files
+
+| ไฟล์ | ใครใช้ | สร้างใน step |
+|------|--------|-------------|
+| `brief.md` | Designer / PM review | 1+2 |
+| `brief.json` | AI agent (step 3 input) | 1+2 |
+| `design-first-draft.md` | Designer เอาไป iterate | 3 |
+
+## Project structure ที่แนะนำ
+
+```
+my-project/
+├── CLAUDE.md                          ← ไฟล์นี้
+├── .claude/
+│   └── skills/
+│       └── tor-to-brief/              ← install skill ที่นี่
+│           ├── SKILL.md
+│           └── scripts/
+│               ├── run_pipeline.sh
+│               └── validate_brief.py
+├── docs/
+│   └── tor.pdf                        ← TOR input
+├── design-system/                     ← DS repo (หรือ symlink)
+└── output/                            ← generated files
+    ├── brief.md
+    ├── brief.json
+    └── design-first-draft.md
+```

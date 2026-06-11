@@ -1,0 +1,21 @@
+# dependencies / build
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# secrets / local config
+.mcp.json
+.env
+.env.*
+*.pem
+*.key
+
+# os / editor
+.DS_Store
+Thumbs.db
+
+# pipeline output
+output/
+tor-output/
