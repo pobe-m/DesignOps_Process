@@ -85,7 +85,8 @@ if [[ -z "$BRIEF_JSON" ]]; then
   TOR_CONTEXT=""
   if [[ -n "$TOR_FILE" ]]; then
     EXT="${TOR_FILE##*.}"
-    case "${EXT,,}" in
+    EXT=$(printf '%s' "$EXT" | tr '[:upper:]' '[:lower:]')   # bash 3.2 compatible (no ${var,,})
+    case "$EXT" in
       pdf)
         log "Extracting text from PDF: $TOR_FILE"
         if command -v pdftotext &>/dev/null; then
@@ -312,7 +313,8 @@ if [[ -f "$TOKENS_JSON" && -n "$HANDOFF_PATH" ]]; then
 
   # confirm, then run
   read -r -p "[tor-to-brief] Confirm updating brand.config.json? [y/N] " CONFIRM
-  if [[ "${CONFIRM,,}" == "y" ]]; then
+  CONFIRM=$(printf '%s' "$CONFIRM" | tr '[:upper:]' '[:lower:]')   # bash 3.2 compatible
+  if [[ "$CONFIRM" == "y" ]]; then
     node "$BRIDGE_SCRIPT" \
       --tokens  "$TOKENS_JSON" \
       --handoff "$HANDOFF_PATH" \
