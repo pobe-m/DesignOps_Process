@@ -816,22 +816,21 @@ If BLOCKED → loop back, fix per the report, and re-audit until it passes befor
 
 ## Step 5 — Figma Screens (separate pipeline)
 
-> Runs separately after Step 4 finishes — not part of the main `run_pipeline.sh`
+> Runs separately after Step 4 finishes — **not part of `run_pipeline.sh`**.
+> This step is **manual / agent-driven via the Figma MCP**, not a shell script.
+> Requires the Figma MCP server connected in Claude Code.
 
-```bash
-# run the Figma import separately
-bash .claude/skills/tor-to-brief/scripts/run_figma.sh \
-  --screens {OUTPUT_DIR}/poc-delivery/screens/ \
-  --tokens  {OUTPUT_DIR}/poc-delivery/design-system/tokens.json
-```
+Ask Claude (in Claude Code, with Figma MCP available):
+> "Build Figma screens from `output/prototype/` using the design tokens"
 
-**Process:**
-1. Read `tokens.json` → create Figma variables via the `figma-generate-library` skill
-2. Read each `.html` in `screens/` → parse layout, components, styles
+**Process the agent follows:**
+1. Read the prototype's tokens (`output/prototype/app/globals.css`) → create Figma variables via the `figma-generate-library` skill
+2. Read each generated screen under `output/prototype/app/**/page.tsx` → parse layout, components, styles
 3. Build Figma frames via the `figma-generate-design` skill, one screen at a time
 4. Map CSS variables → Figma variable bindings
 
-> See `figma-generate-library/SKILL.md` and `figma-generate-design/SKILL.md` for details
+> See the `figma-generate-library` and `figma-generate-design` skills for details.
+> No Figma MCP? Skip Step 5 — Steps 1–4.7 already produce a runnable, audited prototype + handoff doc.
 
 ---
 

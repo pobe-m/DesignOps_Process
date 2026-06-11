@@ -19,6 +19,7 @@ bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh \
   --out ./output
 
 # (optional) add the token bridge into the handoff repo
+# NOTE: requires a separate Hand-off-test repo (not bundled). Skip --handoff if you don't have it.
 bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh \
   --tor docs/tor.pdf --out ./output \
   --handoff ../Hand-off-test --brand my-brand

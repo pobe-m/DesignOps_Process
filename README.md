@@ -89,6 +89,19 @@ Designops-project-test/
 
 ---
 
+## ✅ Prerequisites
+
+| Requirement | Why | Notes |
+|-------------|-----|-------|
+| **Claude Code** | The pipeline is driven by Claude — `run_pipeline.sh` calls the `claude` CLI / runs inside Claude Code to do the actual reading & generation | **Required.** Without it the script only writes prompt files and produces no output |
+| **Node.js ≥ 18** | Building the prototype (`npm install && npm run dev`) and the token bridge | `node --version` |
+| **Python 3** | `validate_brief.py` schema gate + DS inventory scan in Step 3 | `python3 --version` |
+| **poppler** (`pdftotext`) | Better text extraction from PDF TORs | Optional — falls back to letting Claude read the PDF directly. macOS: `brew install poppler` |
+
+> ⚠️ **Run this inside Claude Code** (open the repo folder in Claude Code, or have the `claude` CLI on PATH). Running `run_pipeline.sh` in a plain terminal without Claude will just stage prompt files — it won't generate `brief.md`, the draft, or the prototype.
+
+---
+
 ## 🚀 Quick start
 
 ```bash
@@ -208,6 +221,8 @@ bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh \
 ```
 
 Converts tokens (hex → oklch) into a whitelabel handoff repo and rebuilds it — a separate downstream stage, not part of the core pipeline.
+
+> ⚠️ This step needs a **separate `Hand-off-test` repo** (it reads `Hand-off-test/scripts/lib-oklch.mjs` and writes its `brand.config.json`). That repo is **not bundled here** — skip `--handoff` if you don't have it. The core pipeline (Steps 1–4.7) works fully without it.
 
 ---
 
