@@ -27,7 +27,8 @@ REQUIRED_META_KEYS = ["project_name", "generated_at", "source_file"]
 VALID_PRIORITIES = {"Must", "Should", "Could"}
 VALID_IMPACTS    = {"blocker", "important", "nice-to-know"}
 VALID_CONFIDENCE = {"high", "medium", "low"}
-VALID_PRESETS    = {"government", "healthcare", "fintech", "consumer"}
+# Design interpretation (presets, density, a11y target) lives in intelligence.json
+# (Product Intelligence Layer / validate_intelligence.py), not in the factual brief.
 
 
 def validate(path: str) -> list[str]:
@@ -124,13 +125,6 @@ def validate(path: str) -> list[str]:
                     f"(got: '{impact}')"
                 )
 
-    # ── design_direction.context_preset (optional, but must be valid if present) ─
-    dd = data.get("design_direction") or {}
-    preset = dd.get("context_preset", "")
-    # skip the not-yet-chosen placeholder (contains "|" in the schema template)
-    if preset and "|" not in preset and preset not in VALID_PRESETS:
-        errors.append(f"design_direction.context_preset must be one of {VALID_PRESETS} (got: '{preset}')")
-
     # ── scoring_criteria ──────────────────────────────────────────────────────
     sc = data.get("scoring_criteria")
     if sc is None:
@@ -203,14 +197,9 @@ def main():
         mv = sc.get("minimum_viable") or {}
         must_score_features = len(mv.get("must_have_features", []))
 
-        preset = (data.get("design_direction") or {}).get("context_preset", "-")
-        if preset and "|" in str(preset):
-            preset = "- (not chosen yet)"
-
         print(f"[validate_brief] ✓ Valid")
         print(f"  Project   : {data['meta'].get('project_name', '-')}")
         print(f"  Confidence: {data['meta'].get('tor_confidence', '-')}")
-        print(f"  Preset    : {preset}")
         print(f"  Users     : {users} personas")
         print(f"  Features  : {must} Must / {should} Should / {could} Could")
         print(f"  Flows     : {flows}")

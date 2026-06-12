@@ -59,10 +59,9 @@ Full spec: `.claude/skills/tor-to-brief/commands/generate-prototype.md`
 ### tor-to-brief
 Turns a TOR → design brief → first draft → POC prototype automatically, with a **quality loop**.
 
-**Pipeline:** Step 1+2 brief (+ detect `context_preset`) → Step 3 draft → Step 4 prototype (uses the POC component library + mock data) → **Step 4.6 critique (4-layer)** → **Step 4.7 audit gate (token + WCAG)** → Step 5 Figma
+**Pipeline:** Step 1+2 brief (facts) → **Step 2.5 Product Intelligence Layer** (`intelligence.json` → `design_directives`) → Step 3 draft (maps from directives) → Step 4 prototype → **Step 4.6 critique** → **Step 4.7 audit gate (token + WCAG)** → Step 5 Figma
 
-**Context presets** (picked from the TOR, set density + a11y target):
-`government` (WCAG AAA) · `healthcare` · `fintech` · `consumer` — see the table in `SKILL.md` under "Detect Context Preset"
+**Product Intelligence Layer** (Step 2.5) infers 10 measurable dimensions (user types/expertise/goals/tasks, workflow complexity, data density, error tolerance, accessibility, compliance, decision criticality) → an open `design_directives` object. Replaces the old fixed industry presets; industry-agnostic. Spec: `references/intelligence-layer.md`; gate: `scripts/validate_intelligence.py`.
 
 > Steps 4.6/4.7 + poc-patterns are pulled from the `designops-loop` skill and wired into the pipeline · references live in `.claude/skills/tor-to-brief/references/`
 

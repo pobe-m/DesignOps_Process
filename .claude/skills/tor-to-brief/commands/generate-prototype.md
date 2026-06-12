@@ -18,19 +18,24 @@ Read these files in order. Stop and report if any required file is missing.
 
 ### Required
 ```
-1. output/brief.json                  ← personas · features · flows · scoring · context_preset
-2. output/design-first-draft.md       ← screen inventory · component decisions · gap report
+1. output/brief.json                  ← facts: personas · features · flows · scoring
+2. output/intelligence.json           ← design_directives (density, a11y, safeguards, nav, mandatory_flows)
+3. output/design-first-draft.md       ← screen inventory · component decisions · gap report
 ```
 
-**Read `design_direction.context_preset` from brief.json** — it sets density / motion / font / a11y target:
-| preset | density | a11y target | font notes |
-|--------|---------|-------------|------------|
-| `government` | 5-6 | **WCAG AAA** | clear UI copy, no jargon |
-| `healthcare` | 6-7 | AA+ · error prevention | Geist/Inter, readable |
-| `fintech` | 7-8 | AA · mono for numbers | large display numbers |
-| `consumer` | 3-4 | AA · delight allowed | high personality |
+**Read `design_directives` from `intelligence.json`** (Step 2.5) — it drives the whole build:
+| directive | drives |
+|-----------|--------|
+| `density_target` (1-5) | layout primitive (cards / table+virtualization / dashboard) |
+| `guidance_level` | onboarding, empty-state copy, tooltip density |
+| `safeguard_level` | confirm / undo / preview-before-commit on destructive actions |
+| `a11y_target` (AA/AA_plus/AAA) | component variants + the Step 4.7 audit target |
+| `navigation_model` | app shell (single / wizard / hub_spoke / workspace) |
+| `mandatory_flows` | screens you MUST inject (e.g. consent, audit_log) |
+| `trust_emphasis` | evidence-on-demand / transparency affordances |
 
-If `context_preset` is empty/missing → default to `consumer`, density 4, WCAG AA.
+If `intelligence.json` is missing → stop and run Step 2.5 first; do not guess these.
+If `meta.overall_confidence=low` → produce wireframe-level output + flag a human gate.
 
 ### Optional — brand override
 ```
@@ -323,7 +328,7 @@ Run through every generated file and verify:
 
 > Read `../references/critique-framework.md` — critique every main screen across the 4 layers, then fix.
 
-1. **Visual Hierarchy** · 2. **Information Architecture** · 3. **Component Consistency** · 4. **Context Fit** (density matches `context_preset`?)
+1. **Visual Hierarchy** · 2. **Information Architecture** · 3. **Component Consistency** · 4. **Context Fit** (matches `design_directives`: density / safeguards / guidance / trust?)
 
 - Fix every 🔴 **Critical** + ⚡ **Quick Win** immediately in the prototype
 - 🟡 **High** → log in the handoff doc for Dev
@@ -393,7 +398,7 @@ If there's a TypeScript error → fix it before logging complete.
 ```
 [generate-prototype] ✓ Done
 
-  Preset:  [government | healthcare | fintech | consumer]
+  Directives: density=[1-5] · a11y=[AA|AA_plus|AAA] · safeguards=[level] · nav=[model]
   Brand:   [applied / neutral defaults]
   Screens: [X] generated
     ✓ [screen-name]  →  app/([group])/[path]/page.tsx

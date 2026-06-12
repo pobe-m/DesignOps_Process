@@ -200,6 +200,40 @@ else
   log "brief.json doesn't exist yet — Claude Code will create it after steps 1+2"
 fi
 
+# ── step 2.5: brief → product intelligence ────────────────────────────────────
+# Stage the prompt unconditionally (like step 1+2 / step 3) so it appears in the
+# AGENT ACTIONS checklist even before brief.json exists — the agent produces brief
+# first, then intelligence (the prompt references brief.json by path).
+INTEL_JSON="$OUT_DIR/intelligence.json"
+if [[ ! -f "$INTEL_JSON" ]]; then
+  step "Step 2.5 — Product Intelligence Layer (brief → intelligence.json)"
+  PROMPT_INTEL="$OUT_DIR/.prompt_intel.txt"
+  cat > "$PROMPT_INTEL" << PROMPT
+Read "$BRIEF_JSON" and produce "$INTEL_JSON" following
+$SKILL_DIR/references/intelligence-layer.md (the Product Intelligence Layer).
+
+Infer 10 measurable product dimensions — User Types, User Expertise, User Goals,
+Core Tasks, Workflow Complexity, Data Density, Error Tolerance, Accessibility Needs,
+Compliance Requirements, Decision Criticality — each with evidence + confidence, then
+roll them up into design_directives. Obey the cross-dimension invariants in the reference.
+
+Fact vs interpretation: brief.json = stated facts, intelligence.json = inference.
+Never restate the brief — infer what it implies. No evidence → confidence:"low" + an open_question.
+PROMPT
+  _generate "$PROMPT_INTEL" "Step 2.5 — brief → product intelligence" "$INTEL_JSON"
+fi
+
+# validate intelligence.json (gate)
+if [[ -f "$INTEL_JSON" ]]; then
+  step "Validating intelligence.json"
+  python3 "$SKILL_DIR/scripts/validate_intelligence.py" "$INTEL_JSON" "$BRIEF_JSON" || {
+    err "intelligence.json validation failed — fix it first, or re-run Step 2.5"
+  }
+  log "✓ intelligence.json valid"
+elif [[ -f "$BRIEF_JSON" ]]; then
+  log "intelligence.json not generated yet — Component Mapping (Step 3) needs its design_directives"
+fi
+
 # ── step 3: brief + DS → design draft ────────────────────────────────────────
 # Auto-resolve DS if not provided
 if [[ -z "$DS_PATH" ]]; then
@@ -306,22 +340,33 @@ PYEOF
   PROMPT3_FILE="$OUT_DIR/.prompt_step3.txt"
 
   cat > "$PROMPT3_FILE" << PROMPT
-Read "$BRIEF_JSON" (produced in step 1+2) and the design system inventory below,
-then produce "$OUT_DIR/design-first-draft.md"
+Read "$BRIEF_JSON" (facts), "$INTEL_JSON" (Product Intelligence — Step 2.5), and the
+design system inventory below, then produce "$OUT_DIR/design-first-draft.md".
+
+Drive Component Mapping from intelligence.json → design_directives, NOT from raw features:
+- density_target     → layout primitive (cards / table+virtualization / dashboard)
+- safeguard_level    → confirm / undo / preview-before-commit patterns
+- guidance_level     → onboarding, empty-state copy, tooltip density
+- navigation_model   → app shell (single / wizard / hub_spoke / workspace)
+- a11y_target        → component variants + the audit target for Step 4.7
+- mandatory_flows    → screens you MUST inject (e.g. consent, audit_log)
+- trust_emphasis     → evidence-on-demand / transparency affordances
+Map per user_type + core_task (from intelligence.json), not per feature in isolation.
+If meta.overall_confidence=low (constrain_downstream), produce wireframe-level output + flag a human gate.
 
 design system path: $DS_PATH
 design system inventory:
 $DS_INVENTORY
 
 Produce design-first-draft.md containing:
-1. Screen Inventory — all screens with priority (from core_features)
-2. Screen Breakdown — per screen: purpose, user flow, layout, component usage (JSX), design decisions
+1. Screen Inventory — screens per user_type/task with priority, citing the design_directives that shaped them
+2. Screen Breakdown — per screen: purpose, user flow, layout, component usage (JSX), design decisions (tie each to a directive)
 3. Component Gap Report — components present in the DS vs ones that must be built
 4. Token Usage Guide — design tokens to use in each context
 
 If the design system is shadcn-skills-design-starter, read its root CLAUDE.md first.
 CLAUDE.md describes component patterns, the Figma→Tailwind token map, and naming conventions.
-The component list is in components/ui/ (52 in total).
+The component list is in components/ui/.
 The token reference is in .claude/skills/shadcn-ui-design/references/DESIGN.md
 
 rules:

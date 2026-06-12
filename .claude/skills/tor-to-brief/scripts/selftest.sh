@@ -13,6 +13,7 @@ SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
 RUN="$SCRIPTS_DIR/run_pipeline.sh"
 VALIDATE="$SCRIPTS_DIR/validate_brief.py"
+VALIDATE_INTEL="$SCRIPTS_DIR/validate_intelligence.py"
 SAMPLE_TOR="$SKILL_DIR/references/sample-tor.md"
 
 PASS=0 FAIL=0
@@ -29,6 +30,9 @@ echo "[T1] bash 3.2 compatibility"
 for s in "$RUN" "$SCRIPTS_DIR/setup-prototype.sh" "$0"; do
   [ -f "$s" ] || continue
   /bin/bash -n "$s" 2>/dev/null && ok "syntax: $(basename "$s")" || bad "syntax: $(basename "$s")"
+done
+for p in "$VALIDATE" "$VALIDATE_INTEL"; do
+  python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$p" 2>/dev/null && ok "parses: $(basename "$p")" || bad "parses: $(basename "$p")"
 done
 # bash-4-only constructs that silently break on 3.2
 if grep -nE '\$\{[A-Za-z_][A-Za-z_0-9]*(\^\^|,,)\}|\$\{![A-Za-z_]|(^|[^a-z])mapfile|readarray' "$RUN" >/dev/null 2>&1; then
@@ -48,7 +52,7 @@ json.dump({
   "core_features": [{"id":"F01","name":"f","description":"","priority":"Must","flows":[]}],
   "user_flows": [{"id":"UF01","name":"u","steps":[]}],
   "constraints": {"technical":[],"business":[],"regulatory":[],"timeline":""},
-  "design_direction": {"context_preset":"consumer"},
+  "design_direction": {"tone":"","brand_refs":[],"platform":"","breakpoints":[]},
   "success_metrics": [],
   "open_questions": [],
   "scoring_criteria": {"total_score":None,"passing_threshold":None,"categories":[],"minimum_viable":None},
@@ -61,15 +65,9 @@ echo "[T3] validate gate — invalid briefs fail"
 # missing a required top-level key
 python3 -c "import json;d=json.load(open('$TMP/valid.json'));d.pop('core_features');json.dump(d,open('$TMP/no_features.json','w'))"
 python3 "$VALIDATE" "$TMP/no_features.json" >/dev/null 2>&1 && bad "missing core_features should fail" || ok "missing required key → exit 1"
-# bad preset
-python3 -c "import json;d=json.load(open('$TMP/valid.json'));d['design_direction']['context_preset']='banana';json.dump(d,open('$TMP/bad_preset.json','w'))"
-python3 "$VALIDATE" "$TMP/bad_preset.json" >/dev/null 2>&1 && bad "bad preset should fail" || ok "invalid context_preset → exit 1"
 # bad priority
 python3 -c "import json;d=json.load(open('$TMP/valid.json'));d['core_features'][0]['priority']='Urgent';json.dump(d,open('$TMP/bad_prio.json','w'))"
 python3 "$VALIDATE" "$TMP/bad_prio.json" >/dev/null 2>&1 && bad "bad priority should fail" || ok "invalid priority → exit 1"
-# placeholder preset from the schema template must NOT false-fail
-python3 -c "import json;d=json.load(open('$TMP/valid.json'));d['design_direction']['context_preset']='government | healthcare | fintech | consumer';json.dump(d,open('$TMP/tmpl.json','w'))"
-python3 "$VALIDATE" "$TMP/tmpl.json" >/dev/null 2>&1 && ok "schema-template placeholder preset → exit 0" || bad "placeholder preset should pass"
 
 # ── T4. agent-driven prep mode: stages prompts, no recursion ──────────────────
 echo "[T4] execution model — prep mode stages, no recursion"
@@ -78,7 +76,7 @@ if [ -f "$SAMPLE_TOR" ]; then
   CLAUDECODE=1 /bin/bash "$RUN" --tor "$SAMPLE_TOR" --out "$OUT" >"$OUT/log.txt" 2>&1
   rc=$?
   [ "$rc" = "0" ] && ok "prep run exit 0" || bad "prep run exit $rc"
-  [ -f "$OUT/.prompt_step1.txt" ] && [ -f "$OUT/.prompt_step3.txt" ] && ok "both prompts staged" || bad "prompts not staged"
+  [ -f "$OUT/.prompt_step1.txt" ] && [ -f "$OUT/.prompt_intel.txt" ] && [ -f "$OUT/.prompt_step3.txt" ] && ok "step1 + step2.5 + step3 prompts staged" || bad "prompts not staged"
   grep -q "AGENT ACTIONS" "$OUT/log.txt" && ok "AGENT ACTIONS checklist printed" || bad "no AGENT ACTIONS block"
 else
   bad "sample-tor.md missing — cannot run T4"
@@ -89,6 +87,38 @@ echo "[T5] execution model — --exec refused inside a session"
 CLAUDECODE=1 /bin/bash "$RUN" --tor "$SAMPLE_TOR" --out "$TMP/run2" --exec >"$TMP/exec.log" 2>&1
 rc=$?
 { [ "$rc" != "0" ] && grep -q "recursion" "$TMP/exec.log"; } && ok "--exec refused (exit $rc, recursion guard)" || bad "--exec should refuse inside CLAUDECODE session"
+
+# ── T6. Product Intelligence Layer gate ───────────────────────────────────────
+echo "[T6] intelligence gate — valid passes, invariants fail"
+python3 - "$TMP/intel.json" <<'PY'
+import json, sys
+json.dump({
+ "meta":{"source_brief":"brief.json","generated_at":"2026-06-12","schema_version":"1.0","overall_confidence":"medium","human_reviewed":False},
+ "user_types":[{"id":"UT01","name":"Op","role_category":"operator","relationship":"primary","primary_surface":"console",
+   "expertise":{"domain":"expert","tool":"intermediate","usage_frequency":"daily","training_provided":"yes"},
+   "source":"stated","evidence":["personas[0]"],"confidence":"high"}],
+ "user_goals":[{"id":"G01","user_type_ref":"UT01","statement":"act safely and quickly","job_type":"functional","priority":"must","success_signal":"fewer errors","evidence":["TOR:objective"]}],
+ "core_tasks":[{"id":"T01","name":"submit order","user_type_ref":"UT01","goal_ref":"G01","frequency":"frequent","trigger":"user","steps_estimate":3,"evidence":["UF01"]}],
+ "workflow_complexity":{"overall_score":3,"per_workflow":[]},
+ "data_density":{"overall_band":3,"per_surface":[]},
+ "error_tolerance":{"overall":"zero","reversibility":"irreversible","critical_actions":[{"task_ref":"T01","consequence":"harm","recommended_safeguards":["double-confirm"]}]},
+ "accessibility_needs":{"wcag_target":"AA_plus","default_floor":"WCAG 2.2 AA","specific_needs":[],"motion_sensitivity":False,"drivers":["clinical"]},
+ "compliance_requirements":[{"id":"C01","name":"HIPAA","scope":"medical","source":"stated","mandatory":True,"ui_implications":["audit trail"],"confidence":"high"}],
+ "decision_criticality":{"overall":"safety_critical","decision_points":[{"task_ref":"T01","stakes":"safety","who_bears_consequence":"user","info_completeness_need":"high","recommended_patterns":["double-confirm"]}]},
+ "design_directives":{"density_target":3,"guidance_level":"expert","safeguard_level":"maximal","a11y_target":"AA_plus","mandatory_flows":["audit_log"],"navigation_model":"workspace","trust_emphasis":"high"},
+ "open_questions":[]
+}, open(sys.argv[1],"w"))
+PY
+python3 "$VALIDATE_INTEL" "$TMP/intel.json" >/dev/null 2>&1 && ok "valid intelligence → exit 0" || bad "valid intelligence should pass"
+# invariant: safety_critical ⇒ error_tolerance low/zero
+python3 -c "import json;d=json.load(open('$TMP/intel.json'));d['error_tolerance']['overall']='high';json.dump(d,open('$TMP/i_bad1.json','w'))"
+python3 "$VALIDATE_INTEL" "$TMP/i_bad1.json" >/dev/null 2>&1 && bad "safety_critical+high tolerance should fail" || ok "invariant safety_critical⇒low/zero → exit 1"
+# invariant: design_directives.a11y_target must equal accessibility_needs.wcag_target
+python3 -c "import json;d=json.load(open('$TMP/intel.json'));d['design_directives']['a11y_target']='AAA';json.dump(d,open('$TMP/i_bad2.json','w'))"
+python3 "$VALIDATE_INTEL" "$TMP/i_bad2.json" >/dev/null 2>&1 && bad "a11y rollup mismatch should fail" || ok "invariant a11y rollup match → exit 1"
+# missing top-level key
+python3 -c "import json;d=json.load(open('$TMP/intel.json'));d.pop('design_directives');json.dump(d,open('$TMP/i_bad3.json','w'))"
+python3 "$VALIDATE_INTEL" "$TMP/i_bad3.json" >/dev/null 2>&1 && bad "missing design_directives should fail" || ok "missing required key → exit 1"
 
 # ── result ────────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────────────"

@@ -23,13 +23,18 @@ into a **structured requirement + working prototype** automatically — complete
 ```
   TOR (PDF / DOCX / Notion / GDocs)
           │
-          ▼  Step 1+2  ── read TOR + detect context preset
+          ▼  Step 1+2  ── read TOR → factual brief
    ┌──────────────┐   ┌──────────────────┐
    │  brief.md    │   │  brief.json      │  ← validate_brief.py (gate)
    │  (humans)    │   │  (AI consumes)   │
    └──────────────┘   └────────┬─────────┘
                                │
-                               ▼  Step 3   ── read design system → map features→components
+                               ▼  Step 2.5 ── Product Intelligence Layer (10 dims → design_directives)
+                      ┌─────────────────────┐
+                      │  intelligence.json   │  ← validate_intelligence.py (gate + cross-dim invariants)
+                      └──────────┬──────────┘
+                               │
+                               ▼  Step 3   ── map components from design_directives (not raw features)
                       ┌─────────────────────┐
                       │ design-first-draft.md│
                       └──────────┬──────────┘
@@ -52,7 +57,7 @@ into a **structured requirement + working prototype** automatically — complete
 | | |
 |---|---|
 | 🧠 **Smart TOR reading** | Filters out non-product content, extracts 8 categories, detects scoring tables and maps them back to features |
-| 🎯 **Context Presets** | Auto-selects a preset from the TOR → sets density + a11y target to fit the project |
+| 🧠 **Product Intelligence Layer** | Infers 10 measurable product dimensions → an open `design_directives` object (density, a11y, safeguards, nav) — industry-agnostic, no fixed presets |
 | 🧩 **POC Component Library** | Assembles the prototype from ready-made parts (KPICard, StatusBadge, DataTable, Empty/Error/Loading) + realistic mock data |
 | 🔁 **Quality Loop** | 4-layer critique + audit gate (token compliance + WCAG) before handoff |
 | 📦 **Standalone** | The core pipeline depends on no external repo — the design system is vendored in |
@@ -139,18 +144,20 @@ cd output/prototype && npm install && npm run dev
 
 ---
 
-## 🎯 Context Presets
+## 🧠 Product Intelligence Layer (Step 2.5)
 
-The pipeline picks a preset from the TOR content and uses it to set density and a11y target:
+Between the brief and UI, the pipeline infers **10 measurable product dimensions** from the brief —
+each with **evidence + confidence** — and rolls them up into an open **`design_directives`** object
+that Component Mapping consumes. No fixed industry presets: any domain is expressible as a vector.
 
-| Preset | TOR signals | Density | A11y target |
-|--------|-------------|---------|-------------|
-| `government` | Public sector · procurement · citizen services | 5-6 | **WCAG AAA** |
-| `healthcare` | HIS · hospital · patients · appointments | 6-7 | WCAG AA+ · high error prevention |
-| `fintech` | VoiceBot · finance dashboard · KPIs | 7-8 | WCAG AA · mono font for numbers |
-| `consumer` | General-user app · onboarding · e-commerce | 3-4 | WCAG AA · delight allowed |
+`User Types · User Expertise · User Goals · Core Tasks · Workflow Complexity · Data Density · Error Tolerance · Accessibility Needs · Compliance Requirements · Decision Criticality`
 
-> When a TOR straddles multiple presets → pick the stricter a11y one (`government` > `healthcare` > `fintech` > `consumer`)
+```
+design_directives = { density_target 1-5, guidance_level, safeguard_level,
+                      a11y_target, mandatory_flows[], navigation_model, trust_emphasis }
+```
+
+`validate_intelligence.py` enforces **cross-dimension invariants** (e.g. `safety_critical ⇒ error_tolerance low/zero`; public-sector ⇒ AAA) and **confidence gating** (low confidence → wireframe-level output + a human gate). Full spec: `.claude/skills/tor-to-brief/references/intelligence-layer.md`.
 
 ---
 
@@ -231,7 +238,8 @@ Converts tokens (hex → oklch) into a whitelabel handoff repo and rebuilds it �
 | File | Audience | Created in step |
 |------|----------|-----------------|
 | `brief.md` | Designer / PM review | 1+2 |
-| `brief.json` | AI agent (step 3 input) | 1+2 |
+| `brief.json` | AI agent (facts) | 1+2 |
+| `intelligence.json` | AI agent (design_directives) | 2.5 |
 | `design-first-draft.md` | Designer iteration | 3 |
 | `prototype/` | Dev (Next.js app) | 4 |
 | `prototype/docs/critique.md` | Designer / Dev | 4.6 |

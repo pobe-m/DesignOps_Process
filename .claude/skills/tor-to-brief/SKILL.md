@@ -9,9 +9,10 @@ description: >
   or wants the AI to read a spec/scope document and produce a design output.
   Supports PDF, DOCX, and Notion/Google Docs URLs.
   In Claude Code, run `scripts/run_pipeline.sh` to chain all 3 steps automatically.
+  Step 2.5 (Product Intelligence Layer) infers 10 measurable product dimensions and derives an
+  open design_directives object (density, a11y target, safeguards, navigation) — industry-agnostic.
   Step 4 builds a POC prototype from a ready-made component library + mock data,
-  Step 4.6 runs a 4-layer critique, Step 4.7 is an audit gate (token + WCAG) before handoff,
-  and it picks a context preset (government/healthcare/fintech/consumer) from the TOR to set density + a11y target.
+  Step 4.6 runs a 4-layer critique, Step 4.7 is an audit gate (token + WCAG) before handoff.
 ---
 
 # tor-to-brief
@@ -32,7 +33,12 @@ TOR (PDF / DOCX / Notion / GDocs)
   │  (humans)   │     │  (AI consumes)   │
   └─────────────┘     └────────┬─────────┘
                                │  validate_brief.py
-                               ▼  Step 3
+                               ▼  Step 2.5  Product Intelligence Layer
+                    ┌─────────────────────┐
+                    │  intelligence.json  │  10 dims → design_directives
+                    └──────────┬──────────┘
+                               │  validate_intelligence.py (+ cross-dim invariants)
+                               ▼  Step 3  (consumes design_directives)
                     ┌─────────────────────┐
                     │  design-first-      │
                     │  draft.md           │
@@ -248,20 +254,9 @@ Extracted as:
 
 ---
 
-### Detect Context Preset
-
-From the TOR content, pick **1 preset** that best matches the project type — it sets the visual density, motion, trust signals, and a11y target that Step 4 uses to generate the UI.
-
-| Preset | TOR signals | density | motion | a11y target |
-|--------|-------------|---------|--------|-------------|
-| `government` | Public-sector TOR · procurement · citizen services · formal language | 5-6 | 2 (minimal) | **WCAG AAA** |
-| `healthcare` | HIS · hospital · patients · appointments · medical records | 6-7 | 2-3 | WCAG AA+ · high error prevention |
-| `fintech` | VoiceBot · finance dashboard · KPIs · transactions | 7-8 | 3-4 (subtle) | WCAG AA · mono font for numbers |
-| `consumer` | General-user app · onboarding · e-commerce | 3-4 | 5-6 | WCAG AA · delight allowed |
-
-> Full preset spec (font, trust signals, color guidance) → `references/poc-patterns.md`, used together with Step 4
-
-If the TOR straddles multiple presets → always pick the stricter a11y one (government > healthcare > fintech > consumer) and note it in `open_questions`.
+> **Design interpretation (density, a11y target, safeguards, navigation) is NOT decided here.**
+> The brief stays factual. Those are derived in **Step 2.5 — Product Intelligence Layer** as an
+> open, per-project `design_directives` object — not a fixed industry preset. See that step below.
 
 ---
 
@@ -329,11 +324,7 @@ If the TOR straddles multiple presets → always pick the stricter a11y one (gov
     { "id": "UF01", "name": "", "steps": [], "entry_point": "", "exit_point": "" }
   ],
   "constraints": { "technical": [], "business": [], "regulatory": [], "timeline": "" },
-  "design_direction": {
-    "tone": "", "brand_refs": [], "platform": "", "breakpoints": [],
-    "context_preset": "government | healthcare | fintech | consumer",
-    "preset_rationale": ""
-  },
+  "design_direction": { "tone": "", "brand_refs": [], "platform": "", "breakpoints": [] },
   "success_metrics": [],
   "open_questions": [
     { "id": "Q01", "question": "", "impact": "blocker | important | nice-to-know" }
@@ -371,9 +362,35 @@ After generating, log to stdout:
 
 ---
 
+## Step 2.5 — Product Intelligence Layer
+
+> **Full spec: `references/intelligence-layer.md`** — read it before generating.
+
+Reads `brief.json` (facts) → produces `intelligence.json` (interpretation). This is the bridge
+that stops the pipeline from jumping requirements → UI. It infers **10 measurable product
+dimensions**, each with **evidence + confidence**, and rolls them up into **`design_directives`**
+that Step 3 consumes:
+
+`User Types · User Expertise · User Goals · Core Tasks · Workflow Complexity · Data Density · Error Tolerance · Accessibility Needs · Compliance Requirements · Decision Criticality`
+
+```
+design_directives = { density_target 1-5, guidance_level, safeguard_level,
+                      a11y_target, mandatory_flows[], navigation_model, trust_emphasis }
+```
+
+Rules: infer (don't restate); **evidence or silence** (ungrounded → `confidence:low` + open_question);
+scales not prose; obey the **cross-dimension invariants** (e.g. `safety_critical ⇒ error_tolerance ∈ {low,zero}`; public-sector ⇒ AAA).
+
+Gate: `python3 scripts/validate_intelligence.py {OUTPUT_DIR}/intelligence.json {OUTPUT_DIR}/brief.json`.
+If `overall_confidence=low`, the gate emits `constrain_downstream=true` → Step 3/4 produce wireframe-level output + a human gate.
+
+> This replaces the old fixed industry preset — `design_directives` is derived per-project, so any industry is expressible without code changes.
+
+---
+
 ## Step 3 — Design Draft Generator
 
-Takes `brief.json` + a design system path → `design-first-draft.md`
+Takes `brief.json` + `intelligence.json` (`design_directives`) + a design system path → `design-first-draft.md`. **Map components from `design_directives`, not raw features** (density → layout, safeguard_level → confirm/undo, navigation_model → shell, a11y_target → variants + audit target, mandatory_flows → injected screens).
 
 ### Design system input
 
@@ -498,15 +515,15 @@ Takes `design-first-draft.md` → scaffolds a Next.js prototype using `shadcn-sk
 
 Instead of scaffolding empty screens, assemble from ready-made patterns so it's presentable immediately:
 
-| Pattern | Use when | Presets it favors |
-|---------|----------|-------------------|
-| `KPICard` | dashboard has a key metric/number | fintech · healthcare |
-| `StatusBadge` | there's a state (waiting/in-progress/done) | healthcare · government |
-| `POCDataTable` (+ pagination) | data-heavy list/table | all presets |
-| `EmptyState` · `ErrorState` · Skeleton | **every main screen** needs at least 1 | all presets |
+| Pattern | Use when | Directive that favors it |
+|---------|----------|--------------------------|
+| `KPICard` | dashboard has a key metric/number | `density_target ≥ 4`, `trust_emphasis high` |
+| `StatusBadge` | there's a state (waiting/in-progress/done) | tasks with status; `safeguard_level ≥ strict` |
+| `POCDataTable` (+ pagination) | data-heavy list/table | `density_target ≥ 4` |
+| `EmptyState` · `ErrorState` · Skeleton | **every main screen** needs at least 1 | always |
 
 **Mock data rule:** must be realistic to the domain — real names, real IDs/record numbers, real document numbers · **never** "User 1" / "Lorem ipsum"
-Pull the preset from `brief.json` → `design_direction.context_preset`, then adjust density/motion/font per the preset table.
+Drive density/safeguards/navigation/a11y from `intelligence.json` → `design_directives` (Step 2.5), not from a fixed preset.
 
 ### Starter repo
 
@@ -762,7 +779,7 @@ After generating the prototype, critique every main screen across **4 layers**:
 1. **Visual Hierarchy** — clear focal point in the first 3 seconds? · enough contrast between H1/H2/body? · consistent spacing rhythm?
 2. **Information Architecture** — primary action clear with no competing CTA? · grouping by proximity? · labels include units?
 3. **Component Consistency** — button/icon/radius/color use one system? · hover/focus/loading/empty/error all present?
-4. **Context Fit** — density matches `context_preset`? · enough trust signals for government/healthcare?
+4. **Context Fit** — density matches `design_directives.density_target`? · trust signals match `trust_emphasis`? · guidance matches `guidance_level`?
 
 Output (per screen or combined):
 ```markdown
@@ -794,10 +811,10 @@ Audit the prototype across 3 categories (see the severity matrix in the referenc
 | Category | What to check | gate |
 |----------|---------------|------|
 | **A. Token Compliance** | No hardcoded hex/px that should be a semantic token · radius/shadow follow tokens | 🔴 = block |
-| **B. A11y / WCAG** | Contrast (AA or AAA per preset) · keyboard nav · focus ring · alt/aria-label · all labels present · 44px touch target | 🔴 = block |
+| **B. A11y / WCAG** | Contrast (to `design_directives.a11y_target`) · keyboard nav · focus ring · alt/aria-label · all labels present · 44px touch target | 🔴 = block |
 | **C. Component Quality** | Consistent naming · complete states (hover/focus/disabled/loading/error/empty) · no avoidable `any` | 🟡 = handoff note |
 
-> **a11y target per preset:** `government` → WCAG **AAA** · others → AA (from `context_preset` in brief.json)
+> **a11y target** comes from `intelligence.json` → `design_directives.a11y_target` (Step 2.5 already enforced the floor + public-sector ⇒ AAA invariant).
 
 Output `{OUTPUT_DIR}/prototype/docs/audit-report.md`:
 ```
@@ -855,8 +872,9 @@ Ask Claude (in Claude Code, with Figma MCP available):
 | Prototype has a TypeScript error | Run `npm run typecheck` → fix before handoff |
 | Critique finds a 🔴 Critical | Fix it in the prototype before the audit · don't let it reach handoff |
 | Audit BLOCKED (🔴 critical remaining) | Loop back per `audit-report.md` and re-audit until it passes before Step 5 |
-| `context_preset` = government | Raise a11y target to WCAG **AAA** in Step 4.7 · UI copy must be clear, no jargon |
-| TOR straddles multiple presets | Pick the stricter a11y one (government > healthcare > fintech > consumer) · note in open_questions |
+| Public-sector / accessibility-law signal | Step 2.5 sets `a11y_target = AAA` (enforced invariant) · UI copy must be clear, no jargon |
+| Ambiguous product context | Don't force a bucket — set each `design_directives` dimension from evidence; low confidence → `constrain_downstream` + open_question |
+| `intelligence.json` missing before Step 3 | Run Step 2.5 first — Component Mapping requires `design_directives` |
 
 ---
 
@@ -866,6 +884,7 @@ Load when that step triggers — no need to load them all at once.
 
 | File | Load when |
 |------|-----------|
+| `references/intelligence-layer.md` | Step 2.5 — Product Intelligence Layer (10 dims + design_directives + invariants) |
 | `references/shadcn-prototype.md` | Step 4 — detailed prototype scaffolding |
 | `references/poc-patterns.md` | Step 4 — component library (KPICard/StatusBadge/DataTable/states) + mock data |
 | `references/critique-framework.md` | Step 4.6 — 4-layer critique, per-context templates |
