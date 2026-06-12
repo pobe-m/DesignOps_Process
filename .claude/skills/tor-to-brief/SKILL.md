@@ -86,8 +86,15 @@ bash run_pipeline.sh --brief ./output/brief.json --ds ./design-system --out ./ou
 bash run_pipeline.sh --draft ./output/design-first-draft.md --ds ./design-system --out ./output
 ```
 
-The script runs `validate_brief.py` automatically between steps —  
-if brief.json fails the schema, it halts with an error message before starting step 3.
+### Execution model (how the script and the agent split work)
+
+`run_pipeline.sh` is **agent-driven** — it does the deterministic work and hands generation to you (the active session):
+
+1. The script **extracts** the TOR text, **scans** the design system inventory, and **stages** prompt files (`{OUTPUT_DIR}/.prompt_step1.txt`, `.prompt_step3.txt`).
+2. It prints an **`▶▶ AGENT ACTIONS`** checklist — generate each output **in this session, in order**: read `.prompt_step1.txt` → write `brief.md` + `brief.json`; then read `.prompt_step3.txt` → write `design-first-draft.md`.
+3. After writing `brief.json`, run the gate: `python3 scripts/validate_brief.py {OUTPUT_DIR}/brief.json`.
+
+> The script **never calls `claude -p`** by default — inside Claude Code that would spawn a nested session and hang. For true headless use **from a plain shell** (outside a session) add `--exec`; it's refused if `CLAUDECODE` is set (recursion guard).
 
 ---
 

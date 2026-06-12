@@ -1,10 +1,21 @@
 #!/usr/bin/env bash
 # tor-to-brief pipeline runner
+#
+# Execution model (IMPORTANT):
+#   This script does the DETERMINISTIC work — extract TOR text, scan the design system,
+#   validate brief.json, stage prompts — and hands GENERATION to the agent.
+#   • Default (agent-driven): inside Claude Code, it stages prompts + prints an
+#     "AGENT ACTIONS" checklist, then exits. The active session does the generation.
+#     It never calls `claude -p` (that would spawn a nested session and hang).
+#   • --exec (headless standalone): only from a plain shell OUTSIDE a session, it runs
+#     `claude -p` per step. Refused if CLAUDECODE is set (recursion guard).
+#
 # Usage:
 #   Full pipeline:  run_pipeline.sh --tor <path> --ds <path> [--out <dir>] [--handoff <path>] [--brand <name>]
 #   Step 1+2 only:  run_pipeline.sh --tor <path> [--out <dir>]
 #   Step 3 only:    run_pipeline.sh --brief <path> --ds <path> [--out <dir>]
 #   With bridge:    run_pipeline.sh --tor <path> --handoff <path/to/Hand-off-test> [--brand <name>]
+#   Headless:       run_pipeline.sh --tor <path> --exec        # outside Claude Code only
 #
 # Env vars:
 #   TOR_OUTPUT_DIR    — output directory (default: ./tor-output)
@@ -37,6 +48,13 @@ _resolve_default_ds() {
 BRIEF_JSON=""
 OUT_DIR="${TOR_OUTPUT_DIR:-./tor-output}"
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+EXEC_MODE=0
+# Are we already inside a Claude Code session? (set by the harness)
+IN_SESSION=0
+[[ -n "${CLAUDECODE:-}" ]] && IN_SESSION=1
+# Accumulates the ordered checklist of generation steps for the active agent
+ACTIONS_FILE="$(mktemp -t tor-actions.XXXXXX)"
+trap 'rm -f "$ACTIONS_FILE"' EXIT
 
 # ── parse args ────────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -48,6 +66,7 @@ while [[ $# -gt 0 ]]; do
     --out)       OUT_DIR="$2";   shift 2 ;;
     --handoff)   export TOR_HANDOFF_PATH="$2";  shift 2 ;;
     --brand)     export TOR_BRAND_NAME="$2";    shift 2 ;;
+    --exec)      EXEC_MODE=1; shift ;;
     *) echo "[tor-to-brief] ERROR: unknown flag $1"; exit 1 ;;
   esac
 done
@@ -56,6 +75,27 @@ done
 log()  { echo "[tor-to-brief] $*"; }
 err()  { echo "[tor-to-brief] ERROR: $*" >&2; exit 1; }
 step() { echo ""; echo "[tor-to-brief] ▶ $*"; echo "────────────────────────────────"; }
+
+# _generate <prompt_file> <label> <output_hint>
+# Default: stage the step for the active agent (no recursion).
+# --exec:  run `claude -p` headlessly — refused inside a session (recursion guard).
+_generate() {
+  local prompt_file="$1" label="$2" out_hint="$3"
+  if [[ "$EXEC_MODE" == "1" ]]; then
+    if [[ "$IN_SESSION" == "1" ]]; then
+      err "--exec refused: already inside a Claude Code session (CLAUDECODE is set).
+  Running 'claude -p' here spawns a nested session and hangs.
+  → Drop --exec so THIS session generates from the staged prompt, or run --exec from a plain shell."
+    fi
+    command -v claude &>/dev/null || err "--exec needs the 'claude' CLI on PATH"
+    log "exec: claude -p → $label"
+    claude -p "$(cat "$prompt_file")" --output-format text >/dev/null
+    log "✓ claude finished: $label"
+  else
+    printf '  [ ] %s\n        prompt:  %s\n        output:  %s\n' "$label" "$prompt_file" "$out_hint" >> "$ACTIONS_FILE"
+    log "staged: $label → $prompt_file"
+  fi
+}
 
 # ── validate inputs ───────────────────────────────────────────────────────────
 if [[ -z "$TOR_FILE" && -z "$TOR_TEXT" && -z "$BRIEF_JSON" ]]; then
@@ -144,18 +184,7 @@ $TOR_CONTEXT
 ---
 PROMPT
 
-  log "Prompt ready → $PROMPT_FILE"
-  log "Claude Code will read this prompt and produce brief.md + brief.json"
-
-  # In a Claude Code environment, use claude -p
-  # When run standalone, the prompt is saved for manual processing
-  if command -v claude &>/dev/null; then
-    claude -p "$(cat "$PROMPT_FILE")" --output-format text > /dev/null
-    log "Claude finished step 1+2"
-  else
-    log "claude CLI not found — prompt saved to $PROMPT_FILE"
-    log "Run inside Claude Code so the AI processes it automatically"
-  fi
+  _generate "$PROMPT_FILE" "Step 1+2 — read TOR → write brief" "$OUT_DIR/brief.md + $OUT_DIR/brief.json"
 
   BRIEF_JSON="$OUT_DIR/brief.json"
 fi
@@ -244,16 +273,13 @@ print(json.dumps(result, ensure_ascii=False, indent=2))
 PYEOF
 )
 
-  # Write step 3 prompt
+  # Write step 3 prompt — reference brief.json by PATH (the agent may have just produced it
+  # in this same run, so don't embed a possibly-stale copy).
   PROMPT3_FILE="$OUT_DIR/.prompt_step3.txt"
-  BRIEF_CONTENT=""
-  [[ -f "$BRIEF_JSON" ]] && BRIEF_CONTENT=$(cat "$BRIEF_JSON")
 
   cat > "$PROMPT3_FILE" << PROMPT
-Read the brief.json and design system inventory below, then produce "$OUT_DIR/design-first-draft.md"
-
-brief.json:
-$BRIEF_CONTENT
+Read "$BRIEF_JSON" (produced in step 1+2) and the design system inventory below,
+then produce "$OUT_DIR/design-first-draft.md"
 
 design system path: $DS_PATH
 design system inventory:
@@ -277,14 +303,7 @@ rules:
 - Don't invent components
 PROMPT
 
-  log "Prompt ready → $PROMPT3_FILE"
-
-  if command -v claude &>/dev/null; then
-    claude -p "$(cat "$PROMPT3_FILE")" --output-format text > /dev/null
-    log "Claude finished step 3"
-  else
-    log "claude CLI not found — prompt saved to $PROMPT3_FILE"
-  fi
+  _generate "$PROMPT3_FILE" "Step 3 — brief + DS → design-first-draft" "$OUT_DIR/design-first-draft.md"
 
 else
   log "--ds not provided → skipping step 3"
@@ -339,7 +358,7 @@ fi
 # ── final summary ─────────────────────────────────────────────────────────────
 echo ""
 echo "════════════════════════════════════════"
-log "✓ Pipeline complete → $OUT_DIR/"
+log "✓ Prep complete → $OUT_DIR/"
 echo ""
 for f in brief.md brief.json design-first-draft.md; do
   if [[ -f "$OUT_DIR/$f" ]]; then
@@ -350,3 +369,17 @@ for f in brief.md brief.json design-first-draft.md; do
   fi
 done
 echo "════════════════════════════════════════"
+
+# ── agent-driven handoff (default mode) ───────────────────────────────────────
+if [[ "$EXEC_MODE" != "1" && -s "$ACTIONS_FILE" ]]; then
+  echo ""
+  echo "▶▶ AGENT ACTIONS — generate these now (this session, in order):"
+  cat "$ACTIONS_FILE"
+  echo ""
+  echo "  Then: python3 $SKILL_DIR/scripts/validate_brief.py $OUT_DIR/brief.json"
+  if [[ "$IN_SESSION" != "1" ]]; then
+    echo ""
+    echo "  (Not in a Claude Code session. Open this repo in Claude Code to process the"
+    echo "   staged prompts, or re-run with --exec to generate headlessly.)"
+  fi
+fi
