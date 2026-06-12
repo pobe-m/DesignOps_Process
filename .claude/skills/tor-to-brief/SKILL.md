@@ -510,18 +510,15 @@ Pull the preset from `brief.json` → `design_direction.context_preset`, then ad
 
 ### Starter repo
 
-The base is the DS vendored into the repo (`./design-system`) — standalone/offline. Cloning from GitHub is a fallback only.
+The base is the DS vendored into the repo (`./design-system`) — standalone/offline. Use the setup script; it installs fast and reuses `node_modules` across runs:
 
 ```bash
-# 1. use the in-repo vendored DS first (default)
-if [ -d ./design-system ]; then
-  rsync -a --exclude node_modules --exclude .next --exclude out ./design-system/ {OUTPUT_DIR}/prototype/
-# 2. fallback — clone from GitHub if ./design-system is missing
-else
-  git clone https://github.com/npsin-oreo/shadcn-skills-design-starter.git {OUTPUT_DIR}/prototype
-fi
-cd {OUTPUT_DIR}/prototype && npm install
+bash .claude/skills/tor-to-brief/scripts/setup-prototype.sh --out {OUTPUT_DIR}
 ```
+
+- `npm ci --prefer-offline` + reuse-when-lockfile-matches → first run installs once, repeats are ~instant.
+- Always a **real** `node_modules` (never symlinked — a symlinked one breaks tsc's `@types/react` resolution).
+- Fallback if `./design-system` is missing: `git clone https://github.com/npsin-oreo/shadcn-skills-design-starter.git {OUTPUT_DIR}/prototype && cd {OUTPUT_DIR}/prototype && npm ci`.
 
 The starter (`./design-system`) comes with:
 - Next.js 16 App Router · React 19 · Tailwind CSS v4

@@ -26,7 +26,8 @@ echo "bash: $BASH_VERSION"
 
 # ── T1. bash 3.2 compatibility ────────────────────────────────────────────────
 echo "[T1] bash 3.2 compatibility"
-for s in "$RUN" "$0"; do
+for s in "$RUN" "$SCRIPTS_DIR/setup-prototype.sh" "$0"; do
+  [ -f "$s" ] || continue
   /bin/bash -n "$s" 2>/dev/null && ok "syntax: $(basename "$s")" || bad "syntax: $(basename "$s")"
 done
 # bash-4-only constructs that silently break on 3.2

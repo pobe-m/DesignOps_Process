@@ -69,22 +69,18 @@ All fields are optional. Only override keys that are present — leave the rest 
 
 ## Step 1 — Prepare prototype base
 
-### 1a. Prepare prototype base (prefer in-repo vendored DS)
+### 1a. Prepare prototype base
 
-Resolve the starter base in this order — **always prefer local so it stays standalone/offline**:
+Use the setup script — it copies the in-repo vendored DS, installs deps fast (`npm ci --prefer-offline`), and **reuses** an existing matching `node_modules` so repeat runs are ~instant:
 
 ```bash
-# 1. in-repo vendored DS (default — self-contained, no network needed)
-if [ -d ./design-system ]; then
-  rsync -a --exclude node_modules --exclude .next --exclude out ./design-system/ output/prototype/
-# 2. fallback — clone from GitHub if ./design-system is missing
-else
-  git clone https://github.com/npsin-oreo/shadcn-skills-design-starter.git output/prototype
-fi
-cd output/prototype && npm install
+bash .claude/skills/tor-to-brief/scripts/setup-prototype.sh --out ./output
 ```
 
-If `output/prototype/` already exists and has `package.json` → skip copy/clone, proceed.
+- Uses `./design-system` (vendored) as the base — standalone/offline.
+- First install is the one-time cost; later runs reuse `node_modules` when the lockfile matches.
+- Keeps a **real** `node_modules` (never a symlink — a shared/symlinked one breaks tsc's `@types/react` resolution).
+- No `./design-system`? Fallback: `git clone https://github.com/npsin-oreo/shadcn-skills-design-starter.git output/prototype && cd output/prototype && npm ci`.
 
 ### 1b. Apply brand overrides (if brand.config.json exists)
 
