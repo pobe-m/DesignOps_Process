@@ -83,7 +83,7 @@ _generate() {
   local prompt_file="$1" label="$2" out_hint="$3"
   if [[ "$EXEC_MODE" == "1" ]]; then
     if [[ "$IN_SESSION" == "1" ]]; then
-      err "--exec refused: already inside a Claude Code session (CLAUDECODE is set).
+      err "--exec refused by recursion guard: already inside a Claude Code session (CLAUDECODE is set).
   Running 'claude -p' here spawns a nested session and hangs.
   → Drop --exec so THIS session generates from the staged prompt, or run --exec from a plain shell."
     fi
@@ -125,7 +125,7 @@ if [[ -z "$BRIEF_JSON" ]]; then
   TOR_CONTEXT=""
   if [[ -n "$TOR_FILE" ]]; then
     EXT="${TOR_FILE##*.}"
-    EXT=$(printf '%s' "$EXT" | tr '[:upper:]' '[:lower:]')   # bash 3.2 compatible (no ${var,,})
+    EXT=$(printf '%s' "$EXT" | tr '[:upper:]' '[:lower:]')   # bash 3.2 safe lowercasing (avoid bash-4 expansion)
     case "$EXT" in
       pdf)
         log "Extracting text from PDF: $TOR_FILE"

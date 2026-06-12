@@ -240,6 +240,18 @@ Converts tokens (hex → oklch) into a whitelabel handoff repo and rebuilds it �
 
 ---
 
+## 🧪 Tests
+
+Regression guard for the pipeline scripts (bash 3.2 compat, validate gate, execution model):
+
+```bash
+bash .claude/skills/tor-to-brief/scripts/selftest.sh
+```
+
+Runs under macOS stock `/bin/bash` (3.2) and exits non-zero on any failure. Run it after editing any script in `.claude/skills/tor-to-brief/scripts/`.
+
+---
+
 ## 🧰 Tech stack
 
 `Next.js 16` · `React 19` · `Tailwind CSS v4` · `shadcn/ui (radix-nova)` · `Claude Code`
