@@ -232,20 +232,48 @@ if [[ -n "$DS_PATH" ]]; then
 import os, sys, json
 
 ds_path = sys.argv[1]
-result = {"components": [], "tokens": {}, "has_storybook": False, "readme": ""}
+result = {"components": [], "tokens": {}, "has_storybook": False, "readme": "", "scanned_dir": None, "scope": None}
 
-# Find components
-for search_dir in ["components", "src/components", "lib/components", "packages"]:
+# Non-DS dirs to skip when walking — these are app internals, not the design system surface
+NOISE_DIRS = {
+    "node_modules", "docs", "examples", "example", "demos", "demo", "stories",
+    "providers", "provider", "layout", "internal", "__tests__", "tests", "test",
+    "hooks", "lib", "utils", "templates", "blocks",
+}
+
+def collect(root_dir):
+    found = []
+    for root, dirs, files in os.walk(root_dir):
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in NOISE_DIRS]
+        for f in files:
+            if f.endswith(('.tsx', '.jsx', '.vue', '.svelte')) and not f.endswith(('.test.tsx', '.spec.tsx', '.stories.tsx')):
+                name = f.rsplit('.', 1)[0]
+                if name not in found and not name.startswith('index'):
+                    found.append(name)
+    return found
+
+# Prefer a dedicated UI/primitives dir (the real design-system surface) before falling
+# back to a broad components/ scan — keeps app internals (docs, layout, providers) out.
+UI_DIRS  = ["components/ui", "src/components/ui", "src/ui", "ui", "packages/ui/src", "packages/ui"]
+ALL_DIRS = ["components", "src/components", "lib/components", "packages"]
+
+for search_dir in UI_DIRS:
     full = os.path.join(ds_path, search_dir)
     if os.path.isdir(full):
-        for root, dirs, files in os.walk(full):
-            dirs[:] = [d for d in dirs if not d.startswith('.') and d != 'node_modules']
-            for f in files:
-                if f.endswith(('.tsx', '.jsx', '.vue', '.svelte')) and not f.endswith(('.test.tsx', '.spec.tsx', '.stories.tsx')):
-                    name = f.replace('.tsx','').replace('.jsx','').replace('.vue','').replace('.svelte','')
-                    if name not in result["components"] and not name.startswith('index'):
-                        result["components"].append(name)
+        result["components"] = sorted(collect(full))
+        result["scanned_dir"] = search_dir
+        result["scope"] = "ui-only (dedicated design-system dir)"
         break
+else:
+    for search_dir in ALL_DIRS:
+        full = os.path.join(ds_path, search_dir)
+        if os.path.isdir(full):
+            result["components"] = sorted(collect(full))
+            result["scanned_dir"] = search_dir
+            result["scope"] = "broad (no dedicated ui/ dir; app internals excluded)"
+            break
+
+result["component_count"] = len(result["components"])
 
 # Find token files
 for token_dir in ["tokens", "design-tokens", "src/tokens", "styles"]:
