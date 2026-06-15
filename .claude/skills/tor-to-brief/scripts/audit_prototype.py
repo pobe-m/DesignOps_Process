@@ -25,6 +25,9 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "references" / "aesthetics" / "scripts"))
 import contrast as _contrast  # vendored WCAG checker (ratio from hex)
 
+# ux-writing emoji/dash checker (vendored under references/ux-writing/scripts)
+_EMOJI_CHECK = HERE.parent / "references" / "ux-writing" / "scripts" / "check_no_emoji.py"
+
 # Required pairs FAIL the gate; advisory pairs are reported only. shadcn/ui token names.
 REQUIRED_PAIRS = [
     ("foreground", "background", "body text on page"),
@@ -108,6 +111,16 @@ def lint_gate(proto, scan_dirs):
     return proc.returncode == 0, proc.stdout.strip()
 
 
+# ── gate 3: UX copy — no emoji / no em-dash in product UI (ux-writing) ─────────
+def emoji_gate(proto, scan_dirs):
+    targets = [str(proto / d) for d in scan_dirs if (proto / d).is_dir()]
+    if not targets or not _EMOJI_CHECK.is_file():
+        return None, "skipped (no targets or checker missing)"
+    proc = subprocess.run([sys.executable, str(_EMOJI_CHECK), *targets],
+                          capture_output=True, text=True)
+    return proc.returncode == 0, proc.stdout.strip()
+
+
 # ── gate 2: WCAG contrast over the actual theme ───────────────────────────────
 def contrast_gate(css_path, a11y):
     text = css_path.read_text(errors="ignore")
@@ -157,6 +170,11 @@ def main(argv):
     out += ["## 1. Token compliance (no hardcoded values)",
             "```", lint_out or "(nothing scanned)", "```", ""]
 
+    # gate 3 (UX copy: no emoji / em-dash in product UI)
+    emoji_ok, emoji_out = emoji_gate(proto, scan)
+    out += ["## 3. UX copy — no emoji / em-dash in UI (ux-writing)",
+            "```", emoji_out or "(skipped)", "```", ""]
+
     # gate 2
     css = proto / "app" / "globals.css"
     if css.is_file():
@@ -168,10 +186,13 @@ def main(argv):
         contrast_ok, cfails = False, [f"globals.css not found at {css}"]
         out += ["## 2. WCAG contrast", "globals.css not found — cannot verify.", ""]
 
-    blocked = not (lint_ok and contrast_ok)
+    # emoji_ok may be None (skipped) — only fails the gate when explicitly False
+    blocked = not (lint_ok and contrast_ok and emoji_ok is not False)
     verdict = "🔴 BLOCKED" if blocked else "🟢 PASS"
     out += ["## Verdict", f"- Token compliance: {'🟢' if lint_ok else '🔴'}",
-            f"- WCAG {a11y} contrast: {'🟢' if contrast_ok else '🔴'}", "", f"**{verdict}**"]
+            f"- WCAG {a11y} contrast: {'🟢' if contrast_ok else '🔴'}",
+            f"- UX copy (no emoji/dash): {'🟢' if emoji_ok else ('—' if emoji_ok is None else '🔴')}",
+            "", f"**{verdict}**"]
     if cfails:
         out += ["", "### Contrast failures", *[f"- {f}" for f in cfails]]
 
@@ -182,7 +203,8 @@ def main(argv):
 
     # console summary
     print(f"[audit_prototype] {verdict} — token={'PASS' if lint_ok else 'FAIL'} · "
-          f"WCAG {a11y}={'PASS' if contrast_ok else 'FAIL'}")
+          f"WCAG {a11y}={'PASS' if contrast_ok else 'FAIL'} · "
+          f"copy={'PASS' if emoji_ok else ('—' if emoji_ok is None else 'FAIL')}")
     if report:
         print(f"  → {report}")
     for f in cfails:

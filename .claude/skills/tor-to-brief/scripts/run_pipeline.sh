@@ -263,6 +263,9 @@ Process (anti-slop — deciding BEFORE generating; see $AESTHETICS_DIR/taste/des
 2. Pick a direction that fits the product intelligence — a named_system from the library
    (read its DESIGN.md) or an archetype from taste/aesthetic-systems.md. Justify the fit
    against intelligence dimensions (trust_emphasis, user_expertise, data_density, domain).
+   If the TOR/brief provides reference images, screenshots, or a mockup, INFER the direction
+   from them instead (palette/type/spacing/radius/layout) per $SKILL_DIR/references/image-to-code.md,
+   then anchor to the closest named_system/archetype. Match the design system, never copy assets.
 3. Resolve to tokens (oklch): primary, background, foreground, radius, font_sans (+ font_mono,
    accent if the system uses them). For EVERY contrast pair, also give fg_hex + bg_hex so the
    gate can re-compute the ratio — never self-certify.
@@ -470,6 +473,7 @@ The component list is in components/ui/. Token reference: .claude/skills/shadcn-
 
 rules:
 - Use only components that exist in the inventory; missing → gap "missing"; partial → "partial" + recommendation; don't invent components.
+- UI copy follows $SKILL_DIR/references/ux-writing/voice-tone.md: buttons frontload the verb + name the outcome ("Save changes", not "Submit"); errors are what→why→how; empty states are value→action. Per design_directives: error_tolerance low/zero or a safeguard step → the confirm button RESTATES the action ("Delete account", not "OK") and high-stakes/irreversible actions get type-to-confirm (WCAG 3.3.4). No emoji (lucide icons), no em-dash in UI copy.
 PROMPT
 
   _generate "$PROMPT3_FILE" "Step 3.5 — flows + DS → screen-inventory + draft" "$SCREENS_JSON + $OUT_DIR/design-first-draft.md"

@@ -67,6 +67,8 @@ Turns a TOR → design brief → first draft → POC prototype automatically, wi
 
 **Audit gate** (Step 4.7) is a real runnable check, not agent judgment: `scripts/audit_prototype.py` runs `lint_hardcodes.py` over the screens (no raw hex/px/Tailwind-palette) and recomputes WCAG contrast from the prototype's `globals.css` (oklch→sRGB, light + dark) at `design_directives.a11y_target`. Exit 1 = BLOCKED. `references/audit-checklist.md` covers the qualitative category-C items.
 
+**Folded design skills.** All 19 skills from `shadcn-skills-design-starter` are folded into the pipeline (vendored, standalone). The last 6 added — **ux-writing** (copy rules + `audit_prototype.py` gate 3: no emoji/em-dash), **image-to-code** (Step 2.6 infers an aesthetic from a TOR mockup), **brandkit** (Step 2.6 → full DTCG token foundation at `references/tokens/`, gated by `validate_tokens.py`/`validate_contrast.py`), **migrate-design-system** (bridge to Material/Apple/Fluent/Carbon via `aesthetics/design-systems/crosswalk.md`), **performance** (optional CWV add-on), **governance** (living-DS maintenance, out of the generation loop). Capability index + where each plugs in: `references/SKILLS.md`.
+
 > Steps 4.6/4.7 + poc-patterns are pulled from the `designops-loop` skill and wired into the pipeline · references live in `.claude/skills/tor-to-brief/references/`
 
 **Skill location:** `.claude/skills/tor-to-brief/`

@@ -31,7 +31,7 @@ for s in "$RUN" "$SCRIPTS_DIR/setup-prototype.sh" "$0"; do
   [ -f "$s" ] || continue
   /bin/bash -n "$s" 2>/dev/null && ok "syntax: $(basename "$s")" || bad "syntax: $(basename "$s")"
 done
-for p in "$VALIDATE" "$VALIDATE_INTEL" "$SCRIPTS_DIR/validate_flows.py" "$SCRIPTS_DIR/validate_screens.py" "$SCRIPTS_DIR/validate_aesthetic.py" "$SCRIPTS_DIR/audit_prototype.py" "$SCRIPTS_DIR/lint_hardcodes.py"; do
+for p in "$VALIDATE" "$VALIDATE_INTEL" "$SCRIPTS_DIR/validate_flows.py" "$SCRIPTS_DIR/validate_screens.py" "$SCRIPTS_DIR/validate_aesthetic.py" "$SCRIPTS_DIR/audit_prototype.py" "$SCRIPTS_DIR/lint_hardcodes.py" "$SCRIPTS_DIR/../references/ux-writing/scripts/check_no_emoji.py"; do
   python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$p" 2>/dev/null && ok "parses: $(basename "$p")" || bad "parses: $(basename "$p")"
 done
 # bash-4-only constructs that silently break on 3.2
@@ -207,6 +207,10 @@ export const C = () => <div style={{ color: "#ff0000" }} className="bg-gray-500"
 TSX
 python3 "$SCRIPTS_DIR/audit_prototype.py" "$PROTO" --a11y AA >/dev/null 2>&1 && bad "hardcode should block" || ok "hardcoded hex + bg-gray-500 → exit 1 (BLOCKED)"
 rm -f "$PROTO/app/bad.tsx"
+# emoji in UI copy → ux-writing gate (gate 3) must block
+printf 'export const E = () => <button>Launch \xf0\x9f\x9a\x80</button>;\n' > "$PROTO/app/emoji.tsx"
+python3 "$SCRIPTS_DIR/audit_prototype.py" "$PROTO" --a11y AA >/dev/null 2>&1 && bad "emoji should block" || ok "emoji in UI copy → exit 1 (BLOCKED)"
+rm -f "$PROTO/app/emoji.tsx"
 # low-contrast theme (foreground ~ background) → contrast gate must block
 cat > "$PROTO/app/globals.css" <<'CSS'
 :root {
@@ -217,6 +221,19 @@ cat > "$PROTO/app/globals.css" <<'CSS'
 }
 CSS
 python3 "$SCRIPTS_DIR/audit_prototype.py" "$PROTO" --a11y AA >/dev/null 2>&1 && bad "low contrast should block" || ok "foreground≈background → exit 1 (BLOCKED)"
+
+# ── T11. Folded skills — DTCG token foundation gates (brandkit) ───────────────
+echo "[T11] brandkit/DTCG gates + folded-skill assets present"
+REFS="$SCRIPTS_DIR/../references"
+[ -f "$REFS/ux-writing/voice-tone.md" ] && ok "ux-writing vendored" || bad "ux-writing missing"
+[ -f "$REFS/image-to-code.md" ] && [ -f "$REFS/brandkit.md" ] && [ -f "$REFS/migrate-design-system.md" ] && ok "image-to-code/brandkit/migrate refs present" || bad "folded-skill refs missing"
+[ -f "$REFS/performance.md" ] && [ -f "$REFS/governance.md" ] && [ -f "$REFS/SKILLS.md" ] && ok "performance/governance/SKILLS index present" || bad "capability docs missing"
+if [ -f "$REFS/tokens/scripts/validate_tokens.py" ]; then
+  python3 "$REFS/tokens/scripts/validate_tokens.py" >/dev/null 2>&1 && ok "DTCG validate_tokens → exit 0" || bad "DTCG tokens should be valid"
+  python3 "$REFS/tokens/scripts/validate_contrast.py" >/dev/null 2>&1 && ok "DTCG validate_contrast → exit 0" || bad "DTCG required contrast should pass"
+else
+  bad "DTCG token kit not vendored"
+fi
 
 # ── result ────────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────────────"

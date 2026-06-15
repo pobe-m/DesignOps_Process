@@ -824,6 +824,7 @@ After generating the prototype, run a **scored review** of every main screen:
 2. Run **Nielsen's 10 heuristics**; flag each violation by number (H1…H10).
 3. Run the **anti-slop gate** (`aesthetics/taste/design-taste.md` Banned Defaults): pure `#000/#fff`, identical equal-weight cards, everything centered, rainbow accents, emoji-as-icons, colored left-border strips, em-dash/marketing-filler copy → each is a **Major** finding. The screen must earn `aesthetic.json`'s `mood_adjective`.
 4. The detailed 4-layer checklist (hierarchy / IA / consistency / context-fit, tied to `design_directives`) is in `critique-framework.md` — use it to find the specifics.
+5. **UX copy** (`references/ux-writing/voice-tone.md`): buttons frontload the verb + name the outcome; errors are what→why→how; empty states are value→action; confirm buttons restate the action (type-to-confirm for irreversible ones, per `safeguard_level`). Any bare "No data"/"Error" or "OK"-only confirm is a Major finding.
 
 Output (per screen or combined): the scored table + a prioritized findings table
 `# · Severity (Critical→Major→Minor→Enhancement) · Category · Location · Finding · Recommendation · Heuristic`, plus:
@@ -862,6 +863,8 @@ Audit the prototype across 3 categories (see the severity matrix in the referenc
 | **A. Token Compliance** | `audit_prototype.py` → `lint_hardcodes.py`: no raw hex/px/ms or raw Tailwind palette (`bg-gray-500`) that should be a token | 🔴 = block (script) |
 | **B. A11y / WCAG** | `audit_prototype.py` recomputes contrast for the essential fg/bg pairs at `design_directives.a11y_target`, light + dark | 🔴 = block (script) |
 | **C. Component Quality** | Consistent naming · complete states (hover/focus/disabled/loading/error/empty) · no avoidable `any` | 🟡 = handoff note (agent) |
+
+> `audit_prototype.py` also runs a **UX-copy gate** (gate 3, via `references/ux-writing/scripts/check_no_emoji.py`): no emoji and no em/en-dash in product UI → 🔴 block. Full copy rules: `references/ux-writing/voice-tone.md`.
 
 > **a11y target** comes from `intelligence.json` → `design_directives.a11y_target` (Step 2.5 already enforced the floor + public-sector ⇒ AAA invariant). Pass it straight to `--a11y` (the script maps `AA_plus`→AAA).
 
