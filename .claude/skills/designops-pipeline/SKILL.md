@@ -1,23 +1,24 @@
 ---
-name: tor-to-brief
+name: designops-pipeline
 description: >
-  Turn a TOR (Terms of Reference) file or project brief into a structured design requirement
-  that's ready to use immediately — both as Markdown (for humans) and JSON (for AI agents).
-  Phase 2 reads a design system repo and auto-generates a first-draft component plan.
+  End-to-end DesignOps pipeline: turn a TOR (Terms of Reference) file or project brief into a
+  structured requirement AND a POC prototype that has passed a scored critique + a script audit.
+  Outputs both Markdown (for humans) and JSON artifacts (for AI agents) at every stage.
   Use this skill whenever the user mentions "read TOR", "summarize TOR", "turn TOR into a requirement",
-  "brief requirement from TOR", "tor-to-brief", "drop a TOR", "design brief from spec",
-  or wants the AI to read a spec/scope document and produce a design output.
-  Supports PDF, DOCX, and Notion/Google Docs URLs.
-  In Claude Code, run `scripts/run_pipeline.sh` to chain all 3 steps automatically.
+  "brief requirement from TOR", "designops-pipeline", "tor-to-brief" (the former name),
+  "drop a TOR", "design brief from spec", or wants the AI to read a spec/scope document and produce
+  a design requirement or prototype. Supports PDF, DOCX, and Notion/Google Docs URLs.
+  In Claude Code, run `scripts/run_pipeline.sh` to chain the full pipeline automatically.
   Step 2.5 (Product Intelligence Layer) infers 10 measurable product dimensions and derives an
   open design_directives object (density, a11y target, safeguards, navigation) — industry-agnostic.
   Step 2.6 (Aesthetic Direction) picks one of 138 named design systems or an archetype and resolves
   it into concrete, contrast-checked tokens (the visual/taste layer) → aesthetic.json + brand.config.json.
-  Step 4 builds a POC prototype from a ready-made component library + mock data,
-  Step 4.6 runs a 4-layer critique, Step 4.7 is an audit gate (token + WCAG) before handoff.
+  Step 4 builds a POC prototype from a ready-made component library + mock data, Step 4.6 runs a
+  scored critique (6 weighted dimensions + Nielsen + anti-slop), Step 4.7 is a runnable audit gate
+  (audit_prototype.py: tokens + WCAG contrast in light/dark + no-emoji) before handoff.
 ---
 
-# tor-to-brief
+# designops-pipeline
 
 > Turn a TOR → design brief → first draft  
 > 3 chainable steps with a validation gate between them
@@ -88,7 +89,7 @@ TOR (PDF / DOCX / Notion / GDocs)
 
 ```bash
 # Full pipeline — TOR → brief → draft → POC delivery
-bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh \
+bash .claude/skills/designops-pipeline/scripts/run_pipeline.sh \
   --tor ./docs/tor.pdf \
   --ds  ./design-system \
   --out ./output
@@ -129,7 +130,7 @@ bash run_pipeline.sh --draft ./output/design-first-draft.md --ds ./design-system
 
 No input → halt immediately:
 ```
-[tor-to-brief] ERROR: no TOR input found
+[designops-pipeline] ERROR: no TOR input found
 Specify with --tor <path> or --tor-text "<text>"
 ```
 
@@ -166,7 +167,7 @@ A TOR often mixes in content unrelated to product requirements — identify and 
 
 Log when filtering is done:
 ```
-[tor-to-brief] ✓ Content filter
+[designops-pipeline] ✓ Content filter
   Used: ~[X]% of TOR content
   Dropped: ~[Y]% (procurement · intro · legal boilerplate)
 ```
@@ -364,7 +365,7 @@ Extracted as:
 
 After generating, log to stdout:
 ```
-[tor-to-brief] ✓ Step 1+2 complete
+[designops-pipeline] ✓ Step 1+2 complete
   → {OUTPUT_DIR}/brief.md
   → {OUTPUT_DIR}/brief.json
   Project: [name] · Features: 3 Must / 2 Should / 1 Could · Open Q: 4
@@ -446,7 +447,7 @@ Gate: `validate_screens.py {OUTPUT_DIR}/screen-inventory.json {OUTPUT_DIR}/flows
 
 No `--ds` → halt immediately:
 ```
-[tor-to-brief] ERROR: specify a design system path with --ds <path>
+[designops-pipeline] ERROR: specify a design system path with --ds <path>
 ```
 
 ---
@@ -540,7 +541,7 @@ Build a component inventory before mapping:
 
 After generating, log:
 ```
-[tor-to-brief] ✓ Step 3 complete
+[designops-pipeline] ✓ Step 3 complete
   → {OUTPUT_DIR}/design-first-draft.md
   Screens: 4 · Components: 6 existing / 2 gaps
 ```
@@ -574,7 +575,7 @@ Drive density/safeguards/navigation/a11y from `intelligence.json` → `design_di
 The base is the DS vendored into the repo (`./design-system`) — standalone/offline. Use the setup script; it installs fast and reuses `node_modules` across runs:
 
 ```bash
-bash .claude/skills/tor-to-brief/scripts/setup-prototype.sh --out {OUTPUT_DIR}
+bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out {OUTPUT_DIR}
 ```
 
 - `npm ci --prefer-offline` + reuse-when-lockfile-matches → first run installs once, repeats are ~instant.
@@ -804,7 +805,7 @@ Variables to change: `--primary` · `--secondary` · `--accent`
 
 After generating, log:
 ```
-[tor-to-brief] ✓ Step 4 complete
+[designops-pipeline] ✓ Step 4 complete
   → {OUTPUT_DIR}/prototype/ (Next.js app ready)
   → {OUTPUT_DIR}/prototype/docs/poc-handoff.md
   Screens: [X] · Gap components: [Y] · npm run dev → http://localhost:3000
@@ -838,7 +839,7 @@ Save the full critique to `{OUTPUT_DIR}/prototype/docs/critique.md`
 
 When done, log:
 ```
-[tor-to-brief] ✓ Step 4.6 critique
+[designops-pipeline] ✓ Step 4.6 critique
   Screens reviewed: [X] · Critical fixed: [Y] · Quick wins applied: [Z] · High → handoff: [W]
 ```
 
@@ -848,7 +849,7 @@ When done, log:
 
 > **Run the objective gate first — don't eyeball it:**
 > ```bash
-> python3 .claude/skills/tor-to-brief/scripts/audit_prototype.py \
+> python3 .claude/skills/designops-pipeline/scripts/audit_prototype.py \
 >   {OUTPUT_DIR}/prototype --a11y <AA|AAA from design_directives.a11y_target> \
 >   --report {OUTPUT_DIR}/prototype/docs/audit-report.md
 > ```
@@ -879,7 +880,7 @@ CRITICAL → [list to fix before handoff]
 
 log:
 ```
-[tor-to-brief] ✓ Step 4.7 audit — [PASS | BLOCKED: X critical]
+[designops-pipeline] ✓ Step 4.7 audit — [PASS | BLOCKED: X critical]
   → {OUTPUT_DIR}/prototype/docs/audit-report.md
 ```
 
@@ -960,4 +961,4 @@ Load when that step triggers — no need to load them all at once.
 | `references/sample-tor.md` | Sample TOR for testing the pipeline |
 | `references/CLAUDE.md.template` | Template for a project that installs this skill |
 
-> `poc-patterns` · `critique-framework` · `audit-checklist` are pulled from the `designops-loop` skill (BUILD/PROTOTYPE/CRITIQUE/AUDIT) and wired into the tor-to-brief pipeline.
+> `poc-patterns` · `critique-framework` · `audit-checklist` are pulled from the `designops-loop` skill (BUILD/PROTOTYPE/CRITIQUE/AUDIT) and wired into the designops-pipeline pipeline.

@@ -21,7 +21,7 @@ same `validate_aesthetic.py` gate). Match the design **system**, never copy logo
 
 6. **Anchor to a known system** if the reference is close to one — it stabilizes the tokens:
    ```bash
-   python3 .claude/skills/tor-to-brief/references/aesthetics/scripts/design_systems.py search <term>
+   python3 .claude/skills/designops-pipeline/references/aesthetics/scripts/design_systems.py search <term>
    ```
    Set `direction.type` = `named_system` (the closest match) or `archetype`. The reference image
    informs the token *values*; the anchor keeps them coherent.

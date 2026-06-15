@@ -35,7 +35,7 @@ from hex — the agent never self-certifies; named systems must resolve in this 
 ## Browse
 
 ```bash
-python3 .claude/skills/tor-to-brief/references/aesthetics/scripts/design_systems.py categories
-python3 .claude/skills/tor-to-brief/references/aesthetics/scripts/design_systems.py search dark
-python3 .claude/skills/tor-to-brief/references/aesthetics/scripts/design_systems.py show linear-app
+python3 .claude/skills/designops-pipeline/references/aesthetics/scripts/design_systems.py categories
+python3 .claude/skills/designops-pipeline/references/aesthetics/scripts/design_systems.py search dark
+python3 .claude/skills/designops-pipeline/references/aesthetics/scripts/design_systems.py show linear-app
 ```

@@ -1,11 +1,11 @@
 # CLAUDE.md
-# วางไฟล์นี้ที่ root ของ project ที่จะใช้ tor-to-brief skill
+# วางไฟล์นี้ที่ root ของ project ที่จะใช้ designops-pipeline skill
 
 ## Commands
 
 ### `/generate-prototype`
 Generate Next.js POC screens from `design-first-draft.md`.  
-Full spec: `.claude/skills/tor-to-brief/commands/generate-prototype.md`
+Full spec: `.claude/skills/designops-pipeline/commands/generate-prototype.md`
 
 ```bash
 /generate-prototype            # แสดง Screen Inventory แล้วถามว่าจะทำ screen ไหน
@@ -28,14 +28,14 @@ Full spec: `.claude/skills/tor-to-brief/commands/generate-prototype.md`
 
 ## Skills
 
-### tor-to-brief
+### designops-pipeline
 แปลง TOR → design brief → first draft โดยอัตโนมัติ
 
-**Skill location:** `.claude/skills/tor-to-brief/`
+**Skill location:** `.claude/skills/designops-pipeline/`
 
 **Trigger ด้วยคำสั่ง:**
 ```bash
-bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh [flags]
+bash .claude/skills/designops-pipeline/scripts/run_pipeline.sh [flags]
 ```
 
 **Flags:**
@@ -56,24 +56,24 @@ export TOR_OUTPUT_DIR=./output   # กำหนด default output dir
 
 ```bash
 # Full pipeline — อ่าน TOR + build draft จาก design system
-bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh \
+bash .claude/skills/designops-pipeline/scripts/run_pipeline.sh \
   --tor docs/tor.pdf \
   --ds  ./design-system \
   --out ./output
 
 # Step 1+2 เท่านั้น — ยังไม่มี design system
-bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh \
+bash .claude/skills/designops-pipeline/scripts/run_pipeline.sh \
   --tor docs/tor.pdf \
   --out ./output
 
 # Step 3 เท่านั้น — มี brief.json อยู่แล้ว
-bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh \
+bash .claude/skills/designops-pipeline/scripts/run_pipeline.sh \
   --brief ./output/brief.json \
   --ds    ./design-system \
   --out   ./output
 
 # Validate brief.json โดยไม่รัน pipeline
-python3 .claude/skills/tor-to-brief/scripts/validate_brief.py ./output/brief.json
+python3 .claude/skills/designops-pipeline/scripts/validate_brief.py ./output/brief.json
 ```
 
 ## Output files
@@ -91,7 +91,7 @@ my-project/
 ├── CLAUDE.md                          ← ไฟล์นี้
 ├── .claude/
 │   └── skills/
-│       └── tor-to-brief/              ← install skill ที่นี่
+│       └── designops-pipeline/              ← install skill ที่นี่
 │           ├── SKILL.md
 │           └── scripts/
 │               ├── run_pipeline.sh

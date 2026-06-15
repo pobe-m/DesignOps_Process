@@ -131,7 +131,7 @@ if (opts.dryRun) {
 const updatedConfig = {
   ...brandConfig,
   name: opts.brand,
-  description: `POC brand generated from tor-to-brief pipeline. Base: White Label.`,
+  description: `POC brand generated from designops-pipeline pipeline. Base: White Label.`,
   light: mergedLight,
 }
 

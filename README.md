@@ -57,7 +57,7 @@ fixed presets — the product is read as a vector of measurable dimensions.
 | 🎨 **Aesthetic Direction** | Picks one of **138 named design systems** (apple, linear, stripe, resend…) or an archetype, resolves it to **contrast-checked** tokens. Optionally infers the look from a TOR mockup. |
 | 🛡️ **Real gates, not vibes** | Every stage has a zero-dependency validator. The audit gate is a *script* that recomputes WCAG contrast from `globals.css` (oklch→sRGB, light + dark) and lints for hardcodes + emoji — exit 1 blocks handoff. |
 | 🔁 **Scored quality loop** | Step 4.6 critique = 6 weighted dimensions + Nielsen's 10 heuristics + an anti-slop gate (Banned Defaults). |
-| 🧩 **19 design skills, folded in** | ux-writing, brandkit (DTCG tokens), image-to-code, migrate-design-system, performance, governance — vendored, standalone. See [`references/SKILLS.md`](.claude/skills/tor-to-brief/references/SKILLS.md). |
+| 🧩 **19 design skills, folded in** | ux-writing, brandkit (DTCG tokens), image-to-code, migrate-design-system, performance, governance — vendored, standalone. See [`references/SKILLS.md`](.claude/skills/designops-pipeline/references/SKILLS.md). |
 | 📦 **Standalone** | The whole pipeline depends on no external repo — design system, brand library, and token kit are all vendored in. |
 
 ---
@@ -68,7 +68,7 @@ fixed presets — the product is read as a vector of measurable dimensions.
 # 1. Place your TOR at docs/tor.pdf  (or try the bundled sample — see below)
 
 # 2. Run the full pipeline (standalone — no --ds needed)
-bash .claude/skills/tor-to-brief/scripts/run_pipeline.sh --tor docs/tor.pdf --out ./output
+bash .claude/skills/designops-pipeline/scripts/run_pipeline.sh --tor docs/tor.pdf --out ./output
 
 # 3. Generate the prototype from the draft (inside Claude Code)
 /generate-prototype --all
@@ -78,7 +78,7 @@ cd output/prototype && npm install && npm run dev   # → http://localhost:3000
 ```
 
 > 💡 No TOR handy? Use the bundled sample (Thai HIS TOR — also proves non-English reading):
-> `--tor .claude/skills/tor-to-brief/references/sample-tor.md`
+> `--tor .claude/skills/designops-pipeline/references/sample-tor.md`
 
 > ⚠️ **Run inside Claude Code.** The runner does deterministic prep (extract TOR, scan the DS,
 > stage prompts) and prints an agent checklist; Claude does the reading & generation. In a plain
@@ -118,7 +118,7 @@ design_directives = { density_target 1–5, guidance_level, safeguard_level,
 
 `validate_intelligence.py` enforces **cross-dimension invariants** (e.g. `safety_critical ⇒
 error_tolerance low/zero`, public-sector ⇒ AAA) and **confidence gating** (low confidence →
-wireframe-level output + a human gate). Spec: [`intelligence-layer.md`](.claude/skills/tor-to-brief/references/intelligence-layer.md).
+wireframe-level output + a human gate). Spec: [`intelligence-layer.md`](.claude/skills/designops-pipeline/references/intelligence-layer.md).
 
 ---
 
@@ -132,7 +132,7 @@ instead of the neutral shadcn default ("design slop").
   (apple, linear-app, stripe, vercel, notion, resend, brutalism, glassmorphism, luxury…).
   Browse: `python3 …/aesthetics/scripts/design_systems.py list | search <term> | show <name>`.
 - **Anti-slop first** — name the one `mood_adjective` the result must earn before any token.
-- **From a mockup** — if the TOR ships a screenshot, infer the direction from it ([`image-to-code.md`](.claude/skills/tor-to-brief/references/image-to-code.md)).
+- **From a mockup** — if the TOR ships a screenshot, infer the direction from it ([`image-to-code.md`](.claude/skills/designops-pipeline/references/image-to-code.md)).
 - **Gate** — `validate_aesthetic.py` **recomputes WCAG contrast from the hex values itself**
   (never trusts the agent), requires the chosen system to resolve in the library, and forces
   `a11y_target`/`density_target` to echo `design_directives`.
@@ -143,7 +143,7 @@ Output `aesthetic.json` + a ready-to-apply `output/brand.config.json` for `/gene
 
 ## 🔁 Quality loop — scored, then gated
 
-**Step 4.6 — Critique (scored)** · [`critique-framework.md`](.claude/skills/tor-to-brief/references/critique-framework.md) → [`design-review.md`](.claude/skills/tor-to-brief/references/design-review.md)
+**Step 4.6 — Critique (scored)** · [`critique-framework.md`](.claude/skills/designops-pipeline/references/critique-framework.md) → [`design-review.md`](.claude/skills/designops-pipeline/references/design-review.md)
 
 - Score **6 weighted dimensions** (Hierarchy 20 · Consistency 20 · Accessibility 20 · Usability 20 · Responsiveness 10 · Performance 10) → weighted overall (≤6 = rework).
 - Flag **Nielsen's 10 heuristics** by number · run the **anti-slop gate** (Banned Defaults: pure #000/#fff, identical cards, rainbow accents, emoji-as-icons, em-dash copy…).
@@ -152,7 +152,7 @@ Output `aesthetic.json` + a ready-to-apply `output/brand.config.json` for `/gene
 **Step 4.7 — Audit gate (a real script)** · `audit_prototype.py`
 
 ```bash
-python3 .claude/skills/tor-to-brief/scripts/audit_prototype.py \
+python3 .claude/skills/designops-pipeline/scripts/audit_prototype.py \
   output/prototype --a11y AA --report output/prototype/docs/audit-report.md
 ```
 
@@ -171,7 +171,7 @@ python3 .claude/skills/tor-to-brief/scripts/audit_prototype.py \
 
 All 19 skills from `shadcn-skills-design-starter` are vendored into the pipeline. The
 generation-time ones are wired into steps; the situational ones are available on demand.
-Full map: [`references/SKILLS.md`](.claude/skills/tor-to-brief/references/SKILLS.md).
+Full map: [`references/SKILLS.md`](.claude/skills/designops-pipeline/references/SKILLS.md).
 
 | Skill | Where it plugs in |
 |-------|-------------------|
@@ -212,7 +212,7 @@ Full map: [`references/SKILLS.md`](.claude/skills/tor-to-brief/references/SKILLS
 
 ```
 Designops-project-test/
-├── .claude/skills/tor-to-brief/          # 🛠 the pipeline skill
+├── .claude/skills/designops-pipeline/          # 🛠 the pipeline skill
 │   ├── SKILL.md                          #    full spec
 │   ├── commands/generate-prototype.md
 │   ├── scripts/
@@ -268,12 +268,12 @@ Designops-project-test/
 ## 🧪 Tests
 
 ```bash
-bash .claude/skills/tor-to-brief/scripts/selftest.sh        # 41/41, runs on macOS stock bash 3.2
+bash .claude/skills/designops-pipeline/scripts/selftest.sh        # 41/41, runs on macOS stock bash 3.2
 ```
 
 Covers bash-3.2 compatibility, every validator (valid passes / invalid fails), the aesthetic +
 audit gates (fake brand, low contrast, hardcode, emoji all blocked), and the DTCG token gates.
-**Run it after editing any script** in `.claude/skills/tor-to-brief/scripts/`.
+**Run it after editing any script** in `.claude/skills/designops-pipeline/scripts/`.
 
 ---
 

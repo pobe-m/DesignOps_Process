@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# selftest.sh — regression guard for the tor-to-brief scripts.
+# selftest.sh — regression guard for the designops-pipeline scripts.
 # Runs under macOS stock /bin/bash (3.2). Exits non-zero if any check fails.
 #
-#   bash .claude/skills/tor-to-brief/scripts/selftest.sh
+#   bash .claude/skills/designops-pipeline/scripts/selftest.sh
 #
 # Covers the bugs we actually hit: bash-4-only syntax, the validate gate, and the
 # agent-driven execution model (no claude -p recursion, --exec guard).
@@ -22,7 +22,7 @@ bad()  { FAIL=$((FAIL+1)); echo "  ✗ $1"; }
 TMP="$(mktemp -d -t tor-selftest.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "── tor-to-brief selftest ─────────────────────────────"
+echo "── designops-pipeline selftest ─────────────────────────────"
 echo "bash: $BASH_VERSION"
 
 # ── T1. bash 3.2 compatibility ────────────────────────────────────────────────

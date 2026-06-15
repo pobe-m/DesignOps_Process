@@ -9,7 +9,7 @@
 #   2. npm ci --prefer-offline: lockfile-exact, uses npm's own (~/.npm) cache, skips
 #      audit/fund. The first install is the one-time cost; repeats are fast.
 #
-#   bash .claude/skills/tor-to-brief/scripts/setup-prototype.sh --out ./output [--ds ./design-system]
+#   bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out ./output [--ds ./design-system]
 #
 # bash 3.2 safe.
 

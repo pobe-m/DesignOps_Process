@@ -17,9 +17,9 @@ by default: Storybook + Playwright + Vitest are heavy devDeps, and the pipeline 
 
 1. Copy the template in:
    ```bash
-   cp -R .claude/skills/tor-to-brief/references/storybook/.storybook output/prototype/.storybook
-   cp .claude/skills/tor-to-brief/references/storybook/gen-stories.mjs output/prototype/scripts/
-   cp .claude/skills/tor-to-brief/references/storybook/vitest.config.ts output/prototype/
+   cp -R .claude/skills/designops-pipeline/references/storybook/.storybook output/prototype/.storybook
+   cp .claude/skills/designops-pipeline/references/storybook/gen-stories.mjs output/prototype/scripts/
+   cp .claude/skills/designops-pipeline/references/storybook/vitest.config.ts output/prototype/
    ```
 2. Add the devDeps + scripts to `output/prototype/package.json`, then install:
    ```jsonc

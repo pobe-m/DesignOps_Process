@@ -5,7 +5,7 @@ Read this file every time you enter AUDIT mode.
 
 > **Categories A + B are machine-checked — run the gate, don't eyeball them:**
 > ```bash
-> python3 .claude/skills/tor-to-brief/scripts/audit_prototype.py \
+> python3 .claude/skills/designops-pipeline/scripts/audit_prototype.py \
 >   <prototype_dir> --a11y <AA|AAA> --report <prototype_dir>/docs/audit-report.md
 > ```
 > Exit 1 = BLOCKED. It runs `lint_hardcodes.py` (A) and recomputes WCAG contrast from

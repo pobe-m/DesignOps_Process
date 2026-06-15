@@ -89,7 +89,7 @@ All fields are optional. Only override keys that are present — leave the rest 
 Use the setup script — it copies the in-repo vendored DS, installs deps fast (`npm ci --prefer-offline`), and **reuses** an existing matching `node_modules` so repeat runs are ~instant:
 
 ```bash
-bash .claude/skills/tor-to-brief/scripts/setup-prototype.sh --out ./output
+bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out ./output
 ```
 
 - Uses `./design-system` (vendored) as the base — standalone/offline.
@@ -348,7 +348,7 @@ Run through every generated file and verify:
 
 > **Run the objective gate — it writes the report and decides PASS/BLOCKED:**
 > ```bash
-> python3 .claude/skills/tor-to-brief/scripts/audit_prototype.py \
+> python3 .claude/skills/designops-pipeline/scripts/audit_prototype.py \
 >   output/prototype --a11y <AA|AAA> --report output/prototype/docs/audit-report.md
 > ```
 > Exit 1 = BLOCKED. It recomputes WCAG contrast from `globals.css` (oklch→sRGB, light + dark) and

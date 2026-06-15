@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tor-to-brief pipeline runner
+# designops-pipeline pipeline runner
 #
 # Execution model (IMPORTANT):
 #   This script does the DETERMINISTIC work — extract TOR text, scan the design system,
@@ -67,14 +67,14 @@ while [[ $# -gt 0 ]]; do
     --handoff)   export TOR_HANDOFF_PATH="$2";  shift 2 ;;
     --brand)     export TOR_BRAND_NAME="$2";    shift 2 ;;
     --exec)      EXEC_MODE=1; shift ;;
-    *) echo "[tor-to-brief] ERROR: unknown flag $1"; exit 1 ;;
+    *) echo "[designops-pipeline] ERROR: unknown flag $1"; exit 1 ;;
   esac
 done
 
 # ── helpers ───────────────────────────────────────────────────────────────────
-log()  { echo "[tor-to-brief] $*"; }
-err()  { echo "[tor-to-brief] ERROR: $*" >&2; exit 1; }
-step() { echo ""; echo "[tor-to-brief] ▶ $*"; echo "────────────────────────────────"; }
+log()  { echo "[designops-pipeline] $*"; }
+err()  { echo "[designops-pipeline] ERROR: $*" >&2; exit 1; }
+step() { echo ""; echo "[designops-pipeline] ▶ $*"; echo "────────────────────────────────"; }
 
 # _generate <prompt_file> <label> <output_hint>
 # Default: stage the step for the active agent (no recursion).
@@ -167,7 +167,7 @@ except Exception as e:
   # Write prompt file for Claude Code to execute
   PROMPT_FILE="$OUT_DIR/.prompt_step1.txt"
   cat > "$PROMPT_FILE" << PROMPT
-Read the TOR below and produce 2 output files per the tor-to-brief SKILL.md:
+Read the TOR below and produce 2 output files per the designops-pipeline SKILL.md:
 
 1. Save "$OUT_DIR/brief.md" — Markdown for humans to review
 2. Save "$OUT_DIR/brief.json" — JSON schema for the AI to consume next
@@ -512,7 +512,7 @@ if [[ -f "$TOKENS_JSON" && -n "$HANDOFF_PATH" ]]; then
     --dry-run
 
   # confirm, then run
-  read -r -p "[tor-to-brief] Confirm updating brand.config.json? [y/N] " CONFIRM
+  read -r -p "[designops-pipeline] Confirm updating brand.config.json? [y/N] " CONFIRM
   CONFIRM=$(printf '%s' "$CONFIRM" | tr '[:upper:]' '[:lower:]')   # bash 3.2 compatible
   if [[ "$CONFIRM" == "y" ]]; then
     node "$BRIDGE_SCRIPT" \
