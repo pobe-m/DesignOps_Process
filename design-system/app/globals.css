@@ -67,11 +67,12 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* chart palette — synced 1:1 from Figma chart-1…5 (blue ramp) */
+  --chart-1: oklch(0.734 0.121 243.1); /* #5eb1ef */
+  --chart-2: oklch(0.649 0.193 251.8); /* #0090ff */
+  --chart-3: oklch(0.622 0.183 251.7); /* #0588f0 */
+  --chart-4: oklch(0.556 0.162 252.2); /* #0d74ce */
+  --chart-5: oklch(0.324 0.096 258.8); /* #113264 */
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -102,11 +103,12 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* chart palette — synced 1:1 from Figma chart-1…5 (blue ramp) */
+  --chart-1: oklch(0.734 0.121 243.1); /* #5eb1ef */
+  --chart-2: oklch(0.649 0.193 251.8); /* #0090ff */
+  --chart-3: oklch(0.622 0.183 251.7); /* #0588f0 */
+  --chart-4: oklch(0.556 0.162 252.2); /* #0d74ce */
+  --chart-5: oklch(0.324 0.096 258.8); /* #113264 */
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
