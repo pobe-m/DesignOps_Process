@@ -474,6 +474,7 @@ The component list is in components/ui/. Token reference: .claude/skills/shadcn-
 rules:
 - Use only components that exist in the inventory; missing → gap "missing"; partial → "partial" + recommendation; don't invent components.
 - UI copy follows $SKILL_DIR/references/ux-writing/voice-tone.md: buttons frontload the verb + name the outcome ("Save changes", not "Submit"); errors are what→why→how; empty states are value→action. Per design_directives: error_tolerance low/zero or a safeguard step → the confirm button RESTATES the action ("Delete account", not "OK") and high-stakes/irreversible actions get type-to-confirm (WCAG 3.3.4). No emoji (lucide icons), no em-dash in UI copy.
+- If the platform is mobile/responsive, apply $SKILL_DIR/references/mobile-usability.md: touch targets ≥44px with ≥8px spacing (whole row tappable), primary action in thumb reach (bottom), correct input types/keyboards (tel/email/number/date; input font ≥16px), real labels not placeholder-only, single-column reflow with no horizontal scroll at 320px, and NO hover-only affordances (touch has no hover).
 PROMPT
 
   _generate "$PROMPT3_FILE" "Step 3.5 — flows + DS → screen-inventory + draft" "$SCREENS_JSON + $OUT_DIR/design-first-draft.md"

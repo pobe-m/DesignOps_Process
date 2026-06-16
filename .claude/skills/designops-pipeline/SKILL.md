@@ -826,6 +826,7 @@ After generating the prototype, run a **scored review** of every main screen:
 3. Run the **anti-slop gate** (`aesthetics/taste/design-taste.md` Banned Defaults): pure `#000/#fff`, identical equal-weight cards, everything centered, rainbow accents, emoji-as-icons, colored left-border strips, em-dash/marketing-filler copy → each is a **Major** finding. The screen must earn `aesthetic.json`'s `mood_adjective`.
 4. The detailed 4-layer checklist (hierarchy / IA / consistency / context-fit, tied to `design_directives`) is in `critique-framework.md` — use it to find the specifics.
 5. **UX copy** (`references/ux-writing/voice-tone.md`): buttons frontload the verb + name the outcome; errors are what→why→how; empty states are value→action; confirm buttons restate the action (type-to-confirm for irreversible ones, per `safeguard_level`). Any bare "No data"/"Error" or "OK"-only confirm is a Major finding.
+6. **Mobile usability** (`references/mobile-usability.md`) for mobile-first/responsive products: touch targets ≥44px, primary action in thumb reach, correct input types/keyboards, 320px reflow, no hover-only affordances. Scores the Responsiveness dimension; a miss is at least a Major finding.
 
 Output (per screen or combined): the scored table + a prioritized findings table
 `# · Severity (Critical→Major→Minor→Enhancement) · Category · Location · Finding · Recommendation · Heuristic`, plus:
@@ -855,7 +856,9 @@ When done, log:
 > ```
 > Exit 1 = **BLOCKED**. This recomputes WCAG contrast from globals.css (oklch → sRGB, light + dark)
 > and runs `lint_hardcodes.py` over the screens — categories A + B below are **machine-checked**, not
-> judged. Then read `references/audit-checklist.md` for the qualitative category C items.
+> judged. It audits the **generated surface only**: `components/ui` (vendored shadcn primitives) and
+> any `docs/` dir are auto-excluded, so you can point it at the whole prototype (no `--scan` needed).
+> Use `--include-vendored` to audit everything. Then read `references/audit-checklist.md` for the qualitative category C items.
 
 Audit the prototype across 3 categories (see the severity matrix in the reference):
 

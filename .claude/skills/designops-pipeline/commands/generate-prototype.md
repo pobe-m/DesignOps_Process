@@ -352,8 +352,9 @@ Run through every generated file and verify:
 >   output/prototype --a11y <AA|AAA> --report output/prototype/docs/audit-report.md
 > ```
 > Exit 1 = BLOCKED. It recomputes WCAG contrast from `globals.css` (oklch→sRGB, light + dark) and
-> lints the screens for hardcoded values — A + B are machine-checked. Then read
-> `../references/audit-checklist.md` for the qualitative C items and append them to the report.
+> lints the screens for hardcoded values — A + B are machine-checked. Audits the generated surface
+> only (`components/ui` + any `docs/` dir auto-excluded; no `--scan` needed, `--include-vendored` to
+> audit all). Then read `../references/audit-checklist.md` for the qualitative C items and append them to the report.
 
 | Category | Checks | gate |
 |----------|--------|------|

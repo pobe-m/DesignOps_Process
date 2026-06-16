@@ -211,6 +211,13 @@ rm -f "$PROTO/app/bad.tsx"
 printf 'export const E = () => <button>Launch \xf0\x9f\x9a\x80</button>;\n' > "$PROTO/app/emoji.tsx"
 python3 "$SCRIPTS_DIR/audit_prototype.py" "$PROTO" --a11y AA >/dev/null 2>&1 && bad "emoji should block" || ok "emoji in UI copy → exit 1 (BLOCKED)"
 rm -f "$PROTO/app/emoji.tsx"
+# vendored DS internals (components/ui) must be auto-excluded — a hardcode there does NOT block,
+# but --include-vendored re-includes it and DOES block.
+mkdir -p "$PROTO/components/ui"
+printf 'export const V = () => <div style={{ color: "#abcabc" }}>x \xf0\x9f\x9a\x80</div>;\n' > "$PROTO/components/ui/fake.tsx"
+python3 "$SCRIPTS_DIR/audit_prototype.py" "$PROTO" --a11y AA >/dev/null 2>&1 && ok "components/ui auto-excluded → still PASS" || bad "vendored components/ui should be auto-excluded"
+python3 "$SCRIPTS_DIR/audit_prototype.py" "$PROTO" --a11y AA --include-vendored >/dev/null 2>&1 && bad "--include-vendored should block on the vendored hardcode" || ok "--include-vendored re-includes DS → exit 1 (BLOCKED)"
+rm -rf "$PROTO/components/ui"
 # low-contrast theme (foreground ~ background) → contrast gate must block
 cat > "$PROTO/app/globals.css" <<'CSS'
 :root {
@@ -228,6 +235,7 @@ REFS="$SCRIPTS_DIR/../references"
 [ -f "$REFS/ux-writing/voice-tone.md" ] && ok "ux-writing vendored" || bad "ux-writing missing"
 [ -f "$REFS/image-to-code.md" ] && [ -f "$REFS/brandkit.md" ] && [ -f "$REFS/migrate-design-system.md" ] && ok "image-to-code/brandkit/migrate refs present" || bad "folded-skill refs missing"
 [ -f "$REFS/performance.md" ] && [ -f "$REFS/governance.md" ] && [ -f "$REFS/SKILLS.md" ] && ok "performance/governance/SKILLS index present" || bad "capability docs missing"
+[ -f "$REFS/mobile-usability.md" ] && ok "mobile-usability reference present" || bad "mobile-usability.md missing"
 if [ -f "$REFS/tokens/scripts/validate_tokens.py" ]; then
   python3 "$REFS/tokens/scripts/validate_tokens.py" >/dev/null 2>&1 && ok "DTCG validate_tokens → exit 0" || bad "DTCG tokens should be valid"
   python3 "$REFS/tokens/scripts/validate_contrast.py" >/dev/null 2>&1 && ok "DTCG validate_contrast → exit 0" || bad "DTCG required contrast should pass"

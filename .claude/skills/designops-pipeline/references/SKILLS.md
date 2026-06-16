@@ -30,3 +30,9 @@ TOR ──► brief ──► intelligence(2.5) ──► aesthetic(2.6) ──�
 - **Out of the generation loop:** governance — it's about evolving a *living* design system
   (SemVer, deprecation, contribution) over time. Vendored as reference for when this repo graduates
   from a frozen vendored DS into a maintained one.
+
+## Cross-cutting references (not skills)
+
+- **`mobile-usability.md`** — mobile UI/UX checklist (touch targets, thumb reach, input types, 320px
+  reflow, no hover-only). Wired into Step 3.5 screen generation and the Responsiveness dimension of
+  the Step 4.6 critique. Most TORs here are mobile-first, so this applies by default.

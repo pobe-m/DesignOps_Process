@@ -9,8 +9,14 @@ Two objective, deterministic gates over the BUILT prototype:
      each oklch value to sRGB itself, and checks the essential foreground/background pairs at
      the a11y target (AA 4.5:1 / AAA 7:1 normal text; 3:1 for UI borders). Light AND dark.
 
+By default it audits the GENERATED surface only — `components/ui` (vendored shadcn primitives),
+any `docs/` dir (DS demos + these reports), and node_modules/.next/out are auto-excluded, so you
+can point it at the whole prototype without it tripping over vendored code. Use --include-vendored
+to audit everything.
+
 Usage:
-  python3 audit_prototype.py <prototype_dir> [--a11y AA|AAA] [--scan app,components] [--report path.md]
+  python3 audit_prototype.py <prototype_dir> [--a11y AA|AAA] [--scan app,components,lib]
+                             [--include-vendored] [--report path.md]
 Exit 0 = PASS, 1 = BLOCKED. Zero-dependency (imports vendored contrast.py + lint_hardcodes.py).
 """
 
@@ -101,9 +107,37 @@ def _parse_blocks(css_text):
     return blocks
 
 
+# Vendored / non-UI paths the audit should not blame on the generated screens.
+_SKIP_SEGMENTS = {"node_modules", ".next", "out", "docs"}
+
+
+def _is_vendored(rel_posix):
+    """True if a prototype-relative path is vendored DS / build / report (not generated)."""
+    if "components/ui/" in rel_posix + "/":
+        return True
+    return any(seg in rel_posix.split("/") for seg in _SKIP_SEGMENTS)
+
+
+def _collect_targets(proto, scan_dirs, include_vendored):
+    """Files under the scan dirs, minus vendored DS internals (unless include_vendored)."""
+    files = []
+    for d in scan_dirs:
+        base = proto / d
+        if not base.is_dir():
+            continue
+        for f in base.rglob("*"):
+            if not f.is_file():
+                continue
+            rel = f.relative_to(proto).as_posix()
+            if not include_vendored and _is_vendored(rel):
+                continue
+            files.append(str(f))
+    return files
+
+
 # ── gate 1: token compliance (hardcoded values) ───────────────────────────────
-def lint_gate(proto, scan_dirs):
-    targets = [str(proto / d) for d in scan_dirs if (proto / d).is_dir()]
+def lint_gate(proto, scan_dirs, include_vendored):
+    targets = _collect_targets(proto, scan_dirs, include_vendored)
     if not targets:
         return None, "no scan targets found"
     proc = subprocess.run([sys.executable, str(HERE / "lint_hardcodes.py"), *targets],
@@ -112,8 +146,8 @@ def lint_gate(proto, scan_dirs):
 
 
 # ── gate 3: UX copy — no emoji / no em-dash in product UI (ux-writing) ─────────
-def emoji_gate(proto, scan_dirs):
-    targets = [str(proto / d) for d in scan_dirs if (proto / d).is_dir()]
+def emoji_gate(proto, scan_dirs, include_vendored):
+    targets = _collect_targets(proto, scan_dirs, include_vendored)
     if not targets or not _EMOJI_CHECK.is_file():
         return None, "skipped (no targets or checker missing)"
     proc = subprocess.run([sys.executable, str(_EMOJI_CHECK), *targets],
@@ -146,13 +180,15 @@ def contrast_gate(css_path, a11y):
 
 
 def main(argv):
-    args, a11y, scan, report = [], "AA", ["app", "components"], None
+    args, a11y, scan, report, include_vendored = [], "AA", ["app", "components", "lib"], None, False
     i = 0
     while i < len(argv):
         if argv[i] == "--a11y" and i + 1 < len(argv):
             a11y = argv[i + 1].replace("AA_plus", "AAA").upper(); i += 2
         elif argv[i] == "--scan" and i + 1 < len(argv):
             scan = argv[i + 1].split(","); i += 2
+        elif argv[i] == "--include-vendored":
+            include_vendored = True; i += 1
         elif argv[i] == "--report" and i + 1 < len(argv):
             report = argv[i + 1]; i += 2
         else:
@@ -166,12 +202,12 @@ def main(argv):
     out = [f"# Audit Report — Step 4.7 (a11y target: {a11y})", ""]
 
     # gate 1
-    lint_ok, lint_out = lint_gate(proto, scan)
+    lint_ok, lint_out = lint_gate(proto, scan, include_vendored)
     out += ["## 1. Token compliance (no hardcoded values)",
             "```", lint_out or "(nothing scanned)", "```", ""]
 
     # gate 3 (UX copy: no emoji / em-dash in product UI)
-    emoji_ok, emoji_out = emoji_gate(proto, scan)
+    emoji_ok, emoji_out = emoji_gate(proto, scan, include_vendored)
     out += ["## 3. UX copy — no emoji / em-dash in UI (ux-writing)",
             "```", emoji_out or "(skipped)", "```", ""]
 

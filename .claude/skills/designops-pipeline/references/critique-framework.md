@@ -20,8 +20,12 @@ Score every main screen 1–10 across **six weighted dimensions**, then compute 
 | 2 | Consistency (token + pattern adherence) | 20% |
 | 3 | Accessibility (WCAG 2.2 to `design_directives.a11y_target`) | 20% |
 | 4 | Usability (task efficiency, error prevention, cognitive load) | 20% |
-| 5 | Responsiveness (mobile-first, reflow at 320px, touch targets) | 10% |
+| 5 | Responsiveness — score against `mobile-usability.md` (touch targets ≥44px, thumb reach, input types, reflow at 320px, no hover-only) | 10% |
 | 6 | Performance (loading/skeleton states, animation efficiency) | 10% |
+
+> **Mobile lens:** for any mobile-first / responsive product, run the screen through
+> `mobile-usability.md` — touch-target size, thumb reachability, correct input types/keyboards,
+> 320px reflow, no hover-only affordances. A mobile usability miss is at least a **Major** finding.
 
 ```
 Overall = H×0.2 + Consistency×0.2 + A11y×0.2 + Usability×0.2 + Responsive×0.1 + Perf×0.1

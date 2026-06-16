@@ -163,7 +163,8 @@ python3 .claude/skills/designops-pipeline/scripts/audit_prototype.py \
 | 3 | **UX copy** | `check_no_emoji.py` — no emoji / em-dash in product UI | 🔴 block |
 
 > **Exit 1 = BLOCKED** — handoff/Figma is blocked until it passes. Categories are machine-checked,
-> not eyeballed.
+> not eyeballed. It audits the **generated surface only** (`components/ui` and any `docs/` dir are
+> auto-excluded), so just point it at the prototype — no `--scan` needed; add `--include-vendored` to audit everything.
 
 ---
 
