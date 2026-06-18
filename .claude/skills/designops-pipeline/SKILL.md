@@ -582,13 +582,16 @@ Drive density/safeguards/navigation/a11y from `intelligence.json` → `design_di
 
 ### Starter repo
 
-The base is the DS vendored into the repo (`./design-system`) — standalone/offline. Use the setup script; it installs fast and reuses `node_modules` across runs:
+Use the setup script with `--ds-auto` (graceful Model A default):
 
 ```bash
-bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out {OUTPUT_DIR}
+bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out {OUTPUT_DIR} --ds-auto
 ```
 
-- `npm ci --prefer-offline` + reuse-when-lockfile-matches → first run installs once, repeats are ~instant.
+- **`--ds-auto`** prefers the published DS package `@npsin-oreo/design-system` (Model A — imported, never copied) **when `GITHUB_TOKEN` is set**, and **falls back to the in-repo `./design-system` (rsync, offline)** when the token is absent or the install fails — so it stays standalone/offline-capable.
+  - GitHub Packages requires auth even for public packages → `export GITHUB_TOKEN=$(gh auth token)` to enable import mode. Import mode writes a scaffold `.npmrc` (scope → GitHub Packages) + `transpilePackages` (the DS ships source `.tsx`).
+  - Force one mode: `--ds-import` (always package) or omit `--ds-auto` (always rsync copy).
+- `npm ci --prefer-offline` + reuse-when-lockfile-matches → the rsync path installs once, repeats are ~instant.
 - Always a **real** `node_modules` (never symlinked — a symlinked one breaks tsc's `@types/react` resolution).
 - Fallback if `./design-system` is missing: `git clone https://github.com/npsin-oreo/shadcn-skills-design-starter.git {OUTPUT_DIR}/prototype && cd {OUTPUT_DIR}/prototype && npm ci`.
 

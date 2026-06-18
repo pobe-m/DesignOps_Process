@@ -86,13 +86,14 @@ All fields are optional. Only override keys that are present — leave the rest 
 
 ### 1a. Prepare prototype base
 
-Use the setup script — it copies the in-repo vendored DS, installs deps fast (`npm ci --prefer-offline`), and **reuses** an existing matching `node_modules` so repeat runs are ~instant:
+Use the setup script with `--ds-auto` (graceful Model A default):
 
 ```bash
-bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out ./output
+bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out ./output --ds-auto
 ```
 
-- Uses `./design-system` (vendored) as the base — standalone/offline.
+- **`--ds-auto`**: imports the published `@npsin-oreo/design-system` package when `GITHUB_TOKEN` is set (`export GITHUB_TOKEN=$(gh auth token)`), else falls back to the in-repo `./design-system` (rsync, offline). Force with `--ds-import` (package) or omit the flag (rsync copy).
+- The rsync path copies the in-repo vendored DS, installs fast (`npm ci --prefer-offline`), and **reuses** a matching `node_modules` so repeat runs are ~instant — standalone/offline.
 - First install is the one-time cost; later runs reuse `node_modules` when the lockfile matches.
 - Keeps a **real** `node_modules` (never a symlink — a shared/symlinked one breaks tsc's `@types/react` resolution).
 - No `./design-system`? Fallback: `git clone https://github.com/npsin-oreo/shadcn-skills-design-starter.git output/prototype && cd output/prototype && npm ci`.
