@@ -303,11 +303,13 @@ fi
 AESTHETIC_JSON="$OUT_DIR/aesthetic.json"
 AESTHETICS_DIR="$SKILL_DIR/references/aesthetics"
 # Optional DS token contract (Model A): if present, Step 2.6 may only theme tokens the DS
-# exposes. From TOR_DS_CONTRACT, else an installed @npsin-oreo/design-system. Unset → unchanged.
+# exposes. From TOR_DS_CONTRACT, else an installed @npsin-oreo/design-system, else the
+# resolved DS dir (vendored or --ds). Unset → unchanged (back-compatible).
 DS_CONTRACT="${TOR_DS_CONTRACT:-}"
 if [[ -z "$DS_CONTRACT" ]]; then
   for _c in "$OUT_DIR/prototype/node_modules/@npsin-oreo/design-system/token-contract.json" \
-            "./node_modules/@npsin-oreo/design-system/token-contract.json"; do
+            "./node_modules/@npsin-oreo/design-system/token-contract.json" \
+            ${DS_PATH:+"$DS_PATH/token-contract.json"}; do
     [[ -f "$_c" ]] && DS_CONTRACT="$_c" && break
   done
 fi

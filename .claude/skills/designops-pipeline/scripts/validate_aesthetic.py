@@ -181,6 +181,14 @@ def validate(aesthetic_path, intel_path=None, contract_path=None):
                         if k not in allowed:
                             errors.append(f"{src}.{k!r} is not in {pkg}'s token contract — "
                                           "2.6 may only theme tokens the design system exposes")
+    else:
+        # No contract → brand_config keys are NOT verified against the DS. Every key here
+        # becomes a `--key` CSS-var override in the prototype; a name the DS doesn't define
+        # is a silent no-op (the theme just doesn't apply). Surface that so it's a choice,
+        # not an accident. Pass the DS token-contract.json (Model A) to make it a hard gate.
+        warnings.append("no DS token-contract.json provided — brand_config keys are NOT verified "
+                        "against the design system; a mistyped/unknown token silently fails to theme. "
+                        "Pass token-contract.json (from @npsin-oreo/design-system) to enforce it.")
 
     return errors, warnings
 
