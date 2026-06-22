@@ -15,7 +15,7 @@ description: >
   it into concrete, contrast-checked tokens (the visual/taste layer) → aesthetic.json + brand.config.json.
   Step 4 builds a POC prototype from a ready-made component library + mock data, Step 4.6 runs a
   scored critique (6 weighted dimensions + Nielsen + anti-slop), Step 4.7 is a runnable audit gate
-  (audit_prototype.py: tokens + WCAG contrast in light/dark + no-emoji + component contracts) before handoff.
+  (audit_prototype.py: tokens + WCAG contrast in light/dark + no-emoji + component contracts + no remote-font @import) before handoff.
   UX layers feed the pipeline: Step 2.3 (User Research → research.json: personas/JTBD/pains) and
   Step 2.4 (Competitive Analysis → competitive.json) supply evidence to Step 2.5; Step 4.8
   (Usability Test → usability.json: heuristic + automated + simulated persona walkthrough) runs on
@@ -591,7 +591,7 @@ bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out {OUTPUT_
 - **`--ds-auto`** prefers the published DS package `@npsin-oreo/design-system` (Model A — imported, never copied) **when `GITHUB_TOKEN` is set**, and **falls back to the in-repo `./design-system` (rsync, offline)** when the token is absent or the install fails — so it stays standalone/offline-capable.
   - GitHub Packages requires auth even for public packages → `export GITHUB_TOKEN=$(gh auth token)` to enable import mode. Import mode writes a scaffold `.npmrc` (scope → GitHub Packages) + `transpilePackages` (the DS ships source `.tsx`).
   - Force one mode: `--ds-import` (always package) or omit `--ds-auto` (always rsync copy).
-- ⚠️ **Fonts: load via `next/font` in `layout.tsx`, never a CSS `@import` in `globals.css`.** The DS `@import "…/styles.css"` is inlined first, so a font `@import` ends up after other rules and breaks the "`@import` must come first" rule — `next build` tolerates it but **Turbopack dev 500s on every route**. Use `next/font/google` (self-hosted; exposes a `--font-*` variable that `--font-sans` points at).
+- ⚠️ **Fonts: load via `next/font` in `layout.tsx`, never a CSS `@import` in `globals.css`.** The DS `@import "…/styles.css"` is inlined first, so a font `@import` ends up after other rules and breaks the "`@import` must come first" rule — `next build` tolerates it but **Turbopack dev 500s on every route**. Use `next/font/google` (self-hosted; exposes a `--font-*` variable that `--font-sans` points at). The Step 4.7 audit **gate 5** (`lint_font_imports.py`) blocks a remote-font `@import`.
 - `npm ci --prefer-offline` + reuse-when-lockfile-matches → the rsync path installs once, repeats are ~instant.
 - Always a **real** `node_modules` (never symlinked — a symlinked one breaks tsc's `@types/react` resolution).
 - Fallback if `./design-system` is missing: `git clone https://github.com/npsin-oreo/shadcn-skills-design-starter.git {OUTPUT_DIR}/prototype && cd {OUTPUT_DIR}/prototype && npm ci`.
@@ -885,6 +885,8 @@ Audit the prototype across 3 categories (see the severity matrix in the referenc
 > `audit_prototype.py` also runs a **UX-copy gate** (gate 3, via `references/ux-writing/scripts/check_no_emoji.py`): no emoji and no em/en-dash in product UI → 🔴 block. Full copy rules: `references/ux-writing/voice-tone.md`.
 
 > …and a **component-contract gate** (gate 4, via `scripts/lint_component_contracts.py`): enforces the Button/Dialog/Field usage contracts from `references/component-contracts.md` as runnable a11y checks — icon-only buttons need an accessible name, every `DialogContent`/`AlertDialogContent` needs a `DialogTitle`, every `Input` with an `id` needs a matching `FieldLabel htmlFor` → 🔴 block. Fuzzier rules (one-primary-per-view, missing `DialogDescription`, destructive-variant, `aria-invalid` on errored fields) print as **advisories** and never fail the gate. Escape a justified case with a `ds-allow-contract` comment.
+
+> …and a **font-loading gate** (gate 5, via `scripts/lint_font_imports.py`): a remote-font CSS `@import` (`fonts.googleapis.com` etc.) in `globals.css` → 🔴 block — it 500s the Turbopack dev server; load fonts with `next/font` instead.
 
 > **a11y target** comes from `intelligence.json` → `design_directives.a11y_target` (Step 2.5 already enforced the floor + public-sector ⇒ AAA invariant). Pass it straight to `--a11y` (the script maps `AA_plus`→AAA).
 
