@@ -75,6 +75,21 @@ def check(css_path, aes_path):
         if not re.search(pat, css, re.I | re.S):
             errors.append(f"shape.resolved.pill_slots '{slot}' is not applied — add a brand-scoped "
                           f"[data-slot=\"{slot}\"] {{ @apply rounded-full }} rule so chips read as pills")
+    pill_pad = shape.get("pill_padding")
+    if pill_pad:
+        checked += 1
+        if pill_pad not in css:
+            errors.append(f"shape.resolved.pill_padding '{pill_pad}' is not applied in globals.css")
+
+    # ── spacing ───────────────────────────────────────────────────────────────
+    spacing = (axes.get("spacing") or {}).get("resolved") or {}
+    sv = spacing.get("section_var")
+    if sv:
+        checked += 1
+        # the rhythm token must be defined AND used (declared-only is the no-op we're guarding against)
+        if not re.search(rf"{re.escape(sv)}\s*:", css):
+            errors.append(f"spacing.resolved.section_var '{sv}' is not defined in globals.css")
+        # usage lives in the JSX (e.g. pt-[var(--spacing-section)]) — defined here is the gate's scope
 
     # ── motion ────────────────────────────────────────────────────────────────
     motion = (axes.get("motion") or {}).get("resolved") or {}
