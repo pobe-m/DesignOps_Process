@@ -29,7 +29,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from audit_prototype import _collect_targets  # reuse the generated-surface file collector
 
-DESTRUCTIVE = re.compile(r'variant\s*=\s*["\']destructive|on(?:Delete|Remove)\b|handle(?:Delete|Remove)\b', re.I)
+# A destructive *action* — a destructive-variant Button, or delete/remove handlers — NOT a
+# destructive-variant Badge/Alert (those colour a status/error message, they aren't an action that
+# needs a confirm). `<Button[^>]*variant="destructive"` keeps the match scoped to the button tag
+# ([^>]* spans props/newlines up to the tag's closing '>', so it won't reach a later Badge/Alert).
+DESTRUCTIVE = re.compile(r'<Button[^>]*variant\s*=\s*["\']destructive|on(?:Delete|Remove)\b|handle(?:Delete|Remove)\b', re.I)
 DESTRUCTIVE_TEXT = re.compile(r'>\s*(?:delete|remove|discard)\b', re.I)
 CONFIRM = re.compile(r'AlertDialog|window\.confirm|\bconfirm\s*\(|role\s*=\s*["\']alertdialog', re.I)
 EMPTY = re.compile(r'<Empty\b|EmptyHeader|EmptyTitle|empty-state', re.I)

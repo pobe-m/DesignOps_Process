@@ -82,9 +82,10 @@ def check(proto, inv_path):
     built = 0
     for s in screens:
         must = s.get("priority") == "Must"
-        route = _norm(s.get("route"))
+        raw = s.get("route")
+        route = _norm(raw)        # a root route "/" normalizes to "" — that's the app/page.tsx root, NOT "missing"
         name = s.get("name", s.get("id", "?"))
-        if not route:
+        if not raw:               # only a truly absent/blank route field is "no route"
             if must:
                 errors.append(f"Must screen '{name}' has no route in the manifest — cannot verify it was built")
             continue

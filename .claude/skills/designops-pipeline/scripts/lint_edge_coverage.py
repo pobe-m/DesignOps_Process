@@ -92,6 +92,11 @@ def _hints_for(edge):
     us = (edge.get("ui_state") or "").lower()
     if cat == "destructive":
         return CONFIRM_HINTS, "a confirm (AlertDialog/type-to-confirm)"
+    # Data-presence states (empty/loading/partial) take priority over a CORRECT validation dim:
+    # an empty list driven by 'existence'/'cardinality' is handled by the empty STATE, not by form
+    # validation. Validation hints only apply to an error state (data present but invalid).
+    if us in ("empty", "loading", "partial"):
+        return STATE_HINTS[us], f"a {us} state"
     if cat == "validation" or cd in VALIDATION_DIMS:
         return VALIDATION_HINTS, "inline validation (FieldError/aria-invalid/schema)"
     if us in STATE_HINTS:
