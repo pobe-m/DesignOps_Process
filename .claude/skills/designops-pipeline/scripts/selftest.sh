@@ -31,7 +31,7 @@ for s in "$RUN" "$SCRIPTS_DIR/setup-prototype.sh" "$0"; do
   [ -f "$s" ] || continue
   /bin/bash -n "$s" 2>/dev/null && ok "syntax: $(basename "$s")" || bad "syntax: $(basename "$s")"
 done
-for p in "$VALIDATE" "$VALIDATE_INTEL" "$SCRIPTS_DIR/validate_flows.py" "$SCRIPTS_DIR/validate_screens.py" "$SCRIPTS_DIR/validate_aesthetic.py" "$SCRIPTS_DIR/validate_research.py" "$SCRIPTS_DIR/validate_competitive.py" "$SCRIPTS_DIR/validate_usability.py" "$SCRIPTS_DIR/audit_prototype.py" "$SCRIPTS_DIR/lint_hardcodes.py" "$SCRIPTS_DIR/../references/ux-writing/scripts/check_no_emoji.py"; do
+for p in "$VALIDATE" "$VALIDATE_INTEL" "$SCRIPTS_DIR/validate_flows.py" "$SCRIPTS_DIR/validate_screens.py" "$SCRIPTS_DIR/validate_aesthetic.py" "$SCRIPTS_DIR/validate_research.py" "$SCRIPTS_DIR/validate_competitive.py" "$SCRIPTS_DIR/validate_usability.py" "$SCRIPTS_DIR/validate_critique.py" "$SCRIPTS_DIR/validate_edgecases.py" "$SCRIPTS_DIR/audit_prototype.py" "$SCRIPTS_DIR/lint_hardcodes.py" "$SCRIPTS_DIR/lint_edge_coverage.py" "$SCRIPTS_DIR/../references/ux-writing/scripts/check_no_emoji.py"; do
   python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$p" 2>/dev/null && ok "parses: $(basename "$p")" || bad "parses: $(basename "$p")"
 done
 # bash-4-only constructs that silently break on 3.2
@@ -124,6 +124,14 @@ python3 -c "import json;d=json.load(open('$TMP/intel.json'));d['design_directive
 python3 "$VALIDATE_INTEL" "$TMP/i_bad4.json" >/dev/null 2>&1 && bad "missing rationale should fail" || ok "design_directives.rationale required → exit 1"
 python3 -c "import json;d=json.load(open('$TMP/intel.json'));d['design_directives']['trade_offs']=[{'decision':'x'}];json.dump(d,open('$TMP/i_bad5.json','w'))"
 python3 "$VALIDATE_INTEL" "$TMP/i_bad5.json" >/dev/null 2>&1 && bad "incomplete trade_off should fail" || ok "trade_off needs decision/chose/over/because → exit 1"
+# feature traceability (with brief): every Must feature must be served by a task/goal
+cat > "$TMP/brief_intel.json" <<'PY'
+{"meta":{"project_name":"x","generated_at":"n","source_file":"t"},"project_overview":{"objective":"o"},"target_users":[{"persona":"p"}],"core_features":[{"id":"F1","name":"Submit order","priority":"Must"},{"id":"F2","name":"History","priority":"Should"}],"user_flows":[],"constraints":{},"open_questions":[],"scoring_criteria":{}}
+PY
+python3 -c "import json;d=json.load(open('$TMP/intel.json'));d['core_tasks'][0]['feature_refs']=['F1'];json.dump(d,open('$TMP/i_feat_ok.json','w'))"
+python3 "$VALIDATE_INTEL" "$TMP/i_feat_ok.json" "$TMP/brief_intel.json" >/dev/null 2>&1 && ok "Must feature served by a task → exit 0" || bad "feature_refs coverage should pass"
+python3 -c "import json;d=json.load(open('$TMP/intel.json'));d['core_tasks'][0]['feature_refs']=['F2'];json.dump(d,open('$TMP/i_feat_bad.json','w'))"
+python3 "$VALIDATE_INTEL" "$TMP/i_feat_bad.json" "$TMP/brief_intel.json" >/dev/null 2>&1 && bad "unserved Must feature should fail" || ok "Must feature → task traceability enforced → exit 1"
 
 # ── T7. Flows gate (Step 3) ───────────────────────────────────────────────────
 echo "[T7] flows gate — valid passes, nav_model mismatch fails"
@@ -146,13 +154,23 @@ python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/fl_bad.json" "$TMP/i2.json" >/dev
 # ── T8. Screens gate (Step 3.5) ───────────────────────────────────────────────
 echo "[T8] screens gate — valid passes, coverage gap fails"
 cat > "$TMP/screens.json" <<'PY'
-{"meta":{},"screens":[
- {"id":"SC01","name":"Book","flow_refs":["FL01"],"user_type_ref":"UT01","priority":"Must","purpose":"x","layout_primitive":"form","components":["Card"],"gaps":[],"directive_drivers":[]},
- {"id":"SC02","name":"Consent","flow_refs":["FL02"],"user_type_ref":"UT01","priority":"Must","purpose":"x","layout_primitive":"card","components":["Card","Checkbox"],"gaps":[],"directive_drivers":[]}]}
+{"meta":{"must_have_features":["F1","F2"]},"screens":[
+ {"id":"SC01","name":"Book","route":"book","flow_refs":["FL01"],"feature_refs":["F1"],"states":["loading","empty"],"user_type_ref":"UT01","priority":"Must","purpose":"x","layout_primitive":"form","components":["Card"],"gaps":[],"directive_drivers":[]},
+ {"id":"SC02","name":"Consent","route":"consent","flow_refs":["FL02"],"feature_refs":["F2"],"states":["error"],"user_type_ref":"UT01","priority":"Must","purpose":"x","layout_primitive":"card","components":["Card","Checkbox"],"gaps":[],"directive_drivers":[]}]}
+PY
+cat > "$TMP/brief_sc.json" <<'PY'
+{"meta":{"project_name":"x","generated_at":"now","source_file":"t"},"project_overview":{"objective":"o"},"target_users":[{"persona":"p"}],"core_features":[{"id":"F1","name":"Book","priority":"Must"},{"id":"F2","name":"Consent","priority":"Must"}],"user_flows":[{"id":"FL01","name":"a"},{"id":"FL02","name":"b"}],"constraints":{},"open_questions":[],"scoring_criteria":{"minimum_viable":{"must_have_features":["F1","F2"]}}}
 PY
 python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/screens.json" "$TMP/flows.json" >/dev/null 2>&1 && ok "valid screens (full coverage) → exit 0" || bad "valid screens should pass"
+python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/screens.json" "$TMP/flows.json" "$TMP/brief_sc.json" >/dev/null 2>&1 && ok "feature + scoring coverage (brief) → exit 0" || bad "full feature/scoring coverage should pass"
 python3 -c "import json;d=json.load(open('$TMP/screens.json'));d['screens']=d['screens'][:1];json.dump(d,open('$TMP/sc_bad.json','w'))"
 python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_bad.json" "$TMP/flows.json" >/dev/null 2>&1 && bad "uncovered flow should fail" || ok "flow→screen coverage enforced → exit 1"
+# Must feature F2 left with no screen → fails against the brief (contractual scope dropped)
+python3 -c "import json;d=json.load(open('$TMP/screens.json'));d['screens'][1]['feature_refs']=[];json.dump(d,open('$TMP/sc_feat.json','w'))"
+python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_feat.json" "$TMP/flows.json" "$TMP/brief_sc.json" >/dev/null 2>&1 && bad "uncovered Must feature should fail" || ok "Must feature → screen coverage enforced → exit 1"
+# Must screen without a route → fails (gate 8 can't locate the built page)
+python3 -c "import json;d=json.load(open('$TMP/screens.json'));d['screens'][0].pop('route');json.dump(d,open('$TMP/sc_route.json','w'))"
+python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_route.json" "$TMP/flows.json" >/dev/null 2>&1 && bad "Must screen without route should fail" || ok "Must screen requires route → exit 1"
 
 # ── T9. Aesthetic gate (Step 2.6) ─────────────────────────────────────────────
 echo "[T9] aesthetic gate — valid passes, fake brand + low contrast fails"
@@ -161,28 +179,45 @@ echo "[T9] aesthetic gate — valid passes, fake brand + low contrast fails"
 cat > "$TMP/aes_intel.json" <<'PY'
 {"design_directives":{"a11y_target":"AA","density_target":4}}
 PY
+# full identity theme (light + dark) — the bridge must carry the WHOLE look, not just primary
 cat > "$TMP/aesthetic.json" <<'PY'
-{"meta":{"version":"1"},
+{"meta":{"version":"2"},
  "brief_inference":{"domain":"dev SaaS","audience_tone":"technical","mood_adjective":"precise","motion_depth":"subtle","rationale":"trust+experts → calm engineered system"},
  "direction":{"type":"named_system","name":"linear-app","category":"Productivity & SaaS","spec_ref":"references/aesthetics/design-systems/library/linear-app/DESIGN.md","why_fit":"expert, dense, high trust"},
- "tokens":{"primary":"oklch(0.55 0.18 264)","background":"oklch(0.16 0.01 264)","foreground":"oklch(0.97 0 0)","radius":"0.5rem","font_sans":"Inter, sans-serif"},
- "contrast_checks":[{"pair":"foreground/background","fg_hex":"#f7f7f8","bg_hex":"#191a23"},{"pair":"primary-foreground/primary","fg_hex":"#ffffff","bg_hex":"#5b5bd6"}],
- "constraints":{"a11y_target":"AA","density_target":4},
- "brand_config":{"project_name":"Devflow","primary":"oklch(0.55 0.18 264)","radius":"0.5rem","font_sans":"Inter, sans-serif"}}
+ "signature":{"border_style":"translucent","elevation":"layered","type_weight":"medium","tracking":"tight"},
+ "tokens":{"radius":"0.5rem","font_sans":"Inter, sans-serif","font_mono":"Berkeley Mono, monospace",
+   "colors":{
+     "light":{"background":"#ffffff","foreground":"#18181b","card":"#ffffff","card-foreground":"#18181b","popover":"#ffffff","popover-foreground":"#18181b","primary":"#4338ca","primary-foreground":"#ffffff","secondary":"#f4f4f5","secondary-foreground":"#18181b","muted":"#f4f4f5","muted-foreground":"#52525b","accent":"#eef2ff","accent-foreground":"#3730a3","destructive":"#dc2626","border":"#e4e4e7","input":"#e4e4e7","ring":"#4338ca"},
+     "dark":{"background":"#08090a","foreground":"#f7f8f8","card":"#0f1011","card-foreground":"#f7f8f8","popover":"#0f1011","popover-foreground":"#f7f8f8","primary":"#7170ff","primary-foreground":"#0f1011","secondary":"#191a1b","secondary-foreground":"#f7f8f8","muted":"#191a1b","muted-foreground":"#8a8f98","accent":"#28282c","accent-foreground":"#f7f8f8","destructive":"#ef4444","border":"#23252a","input":"#28282c","ring":"#7170ff"}}},
+ "contrast_checks":[
+   {"pair":"foreground/background","fg_hex":"#18181b","bg_hex":"#ffffff"},
+   {"pair":"primary-foreground/primary","fg_hex":"#ffffff","bg_hex":"#4338ca"},
+   {"pair":"card-foreground/card","fg_hex":"#18181b","bg_hex":"#ffffff"},
+   {"pair":"secondary-foreground/secondary","fg_hex":"#18181b","bg_hex":"#f4f4f5"},
+   {"pair":"muted-foreground/background","fg_hex":"#52525b","bg_hex":"#ffffff"},
+   {"pair":"accent-foreground/accent","fg_hex":"#3730a3","bg_hex":"#eef2ff"}],
+ "constraints":{"a11y_target":"AA","density_target":4,"dark_mode":true},
+ "brand_config":{"project_name":"Devflow","radius":"0.5rem","font_sans":"Inter, sans-serif","font_mono":"Berkeley Mono, monospace",
+   "colors":{
+     "light":{"background":"#ffffff","foreground":"#18181b","card":"#ffffff","card-foreground":"#18181b","popover":"#ffffff","popover-foreground":"#18181b","primary":"#4338ca","primary-foreground":"#ffffff","secondary":"#f4f4f5","secondary-foreground":"#18181b","muted":"#f4f4f5","muted-foreground":"#52525b","accent":"#eef2ff","accent-foreground":"#3730a3","destructive":"#dc2626","border":"#e4e4e7","input":"#e4e4e7","ring":"#4338ca"},
+     "dark":{"background":"#08090a","foreground":"#f7f8f8","card":"#0f1011","card-foreground":"#f7f8f8","popover":"#0f1011","popover-foreground":"#f7f8f8","primary":"#7170ff","primary-foreground":"#0f1011","secondary":"#191a1b","secondary-foreground":"#f7f8f8","muted":"#191a1b","muted-foreground":"#8a8f98","accent":"#28282c","accent-foreground":"#f7f8f8","destructive":"#ef4444","border":"#23252a","input":"#28282c","ring":"#7170ff"}}}}
 PY
-python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aesthetic.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && ok "valid aesthetic → exit 0" || bad "valid aesthetic should pass"
+python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aesthetic.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && ok "valid aesthetic (full identity) → exit 0" || bad "valid aesthetic should pass"
+# narrow theme (primary only, no identity set) must now FAIL — the anti-'plain' fix
+python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d['tokens']={'primary':'#4338ca','background':'#fff','foreground':'#111','radius':'0.5rem','font_sans':'Inter'};d['brand_config']={'project_name':'X','primary':'#4338ca','radius':'0.5rem','font_sans':'Inter'};json.dump(d,open('$TMP/aes_narrow.json','w'))"
+python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_narrow.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && bad "narrow (primary-only) theme should fail" || ok "full identity set required → exit 1 (anti-plain)"
 # fake brand must fail (does not resolve in the vendored library)
 python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d['direction']['name']='totally-made-up';json.dump(d,open('$TMP/aes_brand.json','w'))"
 python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_brand.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && bad "fake brand should fail" || ok "named_system must resolve in library → exit 1"
-# contrast computed from hex must gate (not the self-reported number)
-python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d['contrast_checks'][0]['fg_hex']='#3a3b45';json.dump(d,open('$TMP/aes_contrast.json','w'))"
+# contrast computed from hex must gate (light-gray foreground on white → fails)
+python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d['contrast_checks'][0]['fg_hex']='#c9cdd3';json.dump(d,open('$TMP/aes_contrast.json','w'))"
 python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_contrast.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && bad "low contrast should fail" || ok "contrast recomputed from hex enforced → exit 1"
 # a11y_target must echo design_directives
 python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d['constraints']['a11y_target']='AAA';json.dump(d,open('$TMP/aes_a11y.json','w'))"
 python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_a11y.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && bad "a11y mismatch should fail" || ok "a11y_target must equal directive → exit 1"
 # optional token-contract check: tokens must be ⊆ the DS contract (passed as 3rd arg)
 cat > "$TMP/contract.json" <<'PY'
-{"package":"@npsin-oreo/design-system","color_tokens":["primary","background","foreground"],"scalar_tokens":["radius","font_sans"]}
+{"package":"@npsin-oreo/design-system","color_tokens":["background","foreground","card","card-foreground","popover","popover-foreground","primary","primary-foreground","secondary","secondary-foreground","muted","muted-foreground","accent","accent-foreground","destructive","border","input","ring"],"scalar_tokens":["radius","font_sans","font_mono"]}
 PY
 python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aesthetic.json" "$TMP/aes_intel.json" "$TMP/contract.json" >/dev/null 2>&1 && ok "tokens ⊆ contract → exit 0" || bad "valid tokens within contract should pass"
 python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d['tokens']['glow_accent']='oklch(0.7 0.2 30)';json.dump(d,open('$TMP/aes_contract_bad.json','w'))"
@@ -240,6 +275,48 @@ cat > "$PROTO/app/globals.css" <<'CSS'
 }
 CSS
 python3 "$SCRIPTS_DIR/audit_prototype.py" "$PROTO" --a11y AA >/dev/null 2>&1 && bad "low contrast should block" || ok "foreground≈background → exit 1 (BLOCKED)"
+# gate 6 — theme fidelity: a committed brand.config theme must actually be applied in globals.css
+PF="$TMP/protoF"; mkdir -p "$PF/app"
+printf '<div className="bg-card text-foreground p-4">Hello</div>\n' > "$PF/app/page.tsx"
+cat > "$PF/brand.config.json" <<'PY'
+{"project_name":"Devflow","radius":"0.5rem","font_sans":"Inter",
+ "colors":{"light":{"background":"oklch(1 0 0)","foreground":"oklch(0.2 0 0)","card":"oklch(1 0 0)","card-foreground":"oklch(0.2 0 0)","primary":"oklch(0.45 0.2 264)","primary-foreground":"oklch(1 0 0)","secondary":"oklch(0.96 0 0)","secondary-foreground":"oklch(0.2 0 0)","muted":"oklch(0.96 0 0)","muted-foreground":"oklch(0.45 0 0)","accent":"oklch(0.9 0.05 264)","accent-foreground":"oklch(0.3 0.12 264)","border":"oklch(0.9 0 0)"}}}
+PY
+faithful_css() { cat > "$PF/app/globals.css" <<'CSS'
+:root {
+  --background: oklch(1 0 0); --foreground: oklch(0.2 0 0);
+  --card: oklch(1 0 0); --card-foreground: oklch(0.2 0 0);
+  --primary: oklch(0.45 0.2 264); --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0 0); --secondary-foreground: oklch(0.2 0 0);
+  --muted: oklch(0.96 0 0); --muted-foreground: oklch(0.45 0 0);
+  --accent: oklch(0.9 0.05 264); --accent-foreground: oklch(0.3 0.12 264);
+  --border: oklch(0.9 0 0);
+}
+CSS
+}
+faithful_css
+python3 "$SCRIPTS_DIR/audit_prototype.py" "$PF" --a11y AA >/dev/null 2>&1 && ok "committed theme applied → fidelity PASS (exit 0)" || bad "faithful theme should pass gate 6"
+# regress --primary to a neutral gray (still high contrast) — only fidelity should catch it
+faithful_css; python3 -c "import re,io;p='$PF/app/globals.css';s=open(p).read().replace('--primary: oklch(0.45 0.2 264)','--primary: oklch(0.3 0 0)').replace('--accent: oklch(0.9 0.05 264)','--accent: oklch(0.92 0 0)');open(p,'w').write(s)"
+python3 "$SCRIPTS_DIR/audit_prototype.py" "$PF" --a11y AA >/dev/null 2>&1 && bad "neutral regression should block on fidelity" || ok "primary/accent regressed to neutral → exit 1 (BLOCKED by gate 6)"
+# gate 7 — directive fidelity: build must honor safeguard_level / guidance_level
+GD="$TMP/protoG"; mkdir -p "$GD/app/users"
+printf '{"design_directives":{"safeguard_level":"strict","guidance_level":"guided","density_target":2,"navigation_model":"single"}}' > "$GD/intelligence.json"
+printf 'export default function P(){return <div><AlertDialog/><Empty/><button variant="destructive" onDelete={handleDelete}>Delete</button></div>}\n' > "$GD/app/users/page.tsx"
+python3 "$SCRIPTS_DIR/lint_directive_fidelity.py" "$GD" "$GD/intelligence.json" >/dev/null 2>&1 && ok "directives honored (confirm+empty present) → exit 0" || bad "honored directives should pass gate 7"
+printf 'export default function P(){return <div><Empty/><button variant="destructive" onDelete={handleDelete}>Delete</button></div>}\n' > "$GD/app/users/page.tsx"
+python3 "$SCRIPTS_DIR/lint_directive_fidelity.py" "$GD" "$GD/intelligence.json" >/dev/null 2>&1 && bad "destructive w/o confirm should fail" || ok "safeguard: destructive needs AlertDialog → exit 1 (gate 7)"
+# gate 8 — screen coverage: every Must screen built as a route with its states
+SG="$TMP/protoS"; mkdir -p "$SG/app/dashboard"
+printf '{"screens":[{"id":"S1","name":"Dashboard","route":"dashboard","priority":"Must","states":["empty"]}]}' > "$SG/screen-inventory.json"
+printf 'export default function P(){return <Empty>Nothing here yet</Empty>}\n' > "$SG/app/dashboard/page.tsx"
+python3 "$SCRIPTS_DIR/lint_screen_coverage.py" "$SG" "$SG/screen-inventory.json" >/dev/null 2>&1 && ok "Must screen built with empty state → exit 0" || bad "built screen should pass gate 8"
+rm -rf "$SG/app/dashboard"
+python3 "$SCRIPTS_DIR/lint_screen_coverage.py" "$SG" "$SG/screen-inventory.json" >/dev/null 2>&1 && bad "missing Must route should fail" || ok "Must screen not built → exit 1 (gate 8)"
+# wired into audit_prototype: intelligence.json beside prototype is picked up
+# (capture into a var — piping to `grep -q` + pipefail makes the SIGPIPE'd python fail the pipeline)
+AUD_OUT="$(python3 "$SCRIPTS_DIR/audit_prototype.py" "$GD" --a11y AA 2>&1)"
+case "$AUD_OUT" in *"directive=FAIL"*) ok "audit_prototype runs gate 7 (directive)";; *) bad "gate 7 not wired into audit_prototype";; esac
 # Step 4.7b runtime audit — scripts present; orchestrator degrades gracefully (no Playwright → exit 0)
 RT="$SCRIPTS_DIR/../references/runtime-audit/scripts"
 [ -f "$RT/audit_runtime.mjs" ] && [ -f "$RT/axe_audit.mjs" ] && [ -f "$RT/verify_states.mjs" ] && ok "runtime-audit scripts vendored" || bad "runtime-audit scripts missing"
@@ -341,6 +418,109 @@ else bad "figma_prep failed on fixtures"; fi
 python3 -c "import json,sys; d=json.load(open('$TMP/fb/theme.json')); sys.exit(0 if len(d)==19 else 1)" 2>/dev/null && ok "theme has 19 semantic tokens" || bad "theme token count wrong"
 python3 -c "import json,glob,sys; bc=[f for f in glob.glob('$TMP/fb/vars_*brand-color*.json')][0]; items=json.load(open(bc))['items']; n=[i[0] for i in items]; sys.exit(0 if not any('coral' in x or 'cerulean' in x for x in n) and any('primary' in x for x in n) else 1)" 2>/dev/null && ok "brand-color trimmed (no cerulean/coral, keeps primary)" || bad "brand-color trim failed"
 python3 -c "import json,sys; m=json.load(open('$TMP/fb/manifest.json')); sys.exit(0 if m['device']['name']=='Mobile' and m['font_default']=='Noto Sans Thai' else 1)" 2>/dev/null && ok "manifest device=Mobile + default font=Noto Sans Thai" || bad "manifest device/font wrong"
+
+# ── T15. validate_critique — judge pattern + score cap (Step 4.6) ─────────────
+echo "[T15] validate_critique — judge verdict caps the self-score"
+VC="$SCRIPTS_DIR/validate_critique.py"
+_crit() { printf '%s' "$1" > "$TMP/crit.json"; }
+GOOD_SCREENS='"screens":[{"name":"Booking","score":7.5,"dimensions":{"hierarchy":8,"consistency":8,"a11y":7,"usability":7,"responsiveness":7,"performance":7}}]'
+# valid, judge passes
+_crit "{\"judge_verdict\":true,\"overall_score\":7.4,$GOOD_SCREENS,\"what_worked\":[\"clear primary action\"]}"
+python3 "$VC" "$TMP/crit.json" >/dev/null 2>&1 && ok "valid critique (judge pass) → exit 0" || bad "valid critique rejected"
+# judge fails but score stays high → must BLOCK (the cap rule)
+_crit "{\"judge_verdict\":false,\"judge_reason\":\"submit dead\",\"overall_score\":7.0,$GOOD_SCREENS}"
+python3 "$VC" "$TMP/crit.json" >/dev/null 2>&1 && bad "judge=false + score 7.0 not blocked (cap rule broken)" || ok "judge=false + high score → blocked (cap enforced)"
+# judge fails and score honestly capped → exit 0
+_crit "{\"judge_verdict\":false,\"judge_reason\":\"submit dead\",\"overall_score\":2.0,$GOOD_SCREENS}"
+python3 "$VC" "$TMP/crit.json" >/dev/null 2>&1 && ok "judge=false + score 2.0 → exit 0 (cap satisfied)" || bad "honestly-capped critique rejected"
+# judge=false without a reason → block
+_crit "{\"judge_verdict\":false,\"overall_score\":2.0,$GOOD_SCREENS}"
+python3 "$VC" "$TMP/crit.json" >/dev/null 2>&1 && bad "judge=false without judge_reason not blocked" || ok "judge=false needs judge_reason → blocked"
+# missing judge_verdict entirely → block
+_crit "{\"overall_score\":7.4,$GOOD_SCREENS}"
+python3 "$VC" "$TMP/crit.json" >/dev/null 2>&1 && bad "missing judge_verdict not blocked" || ok "missing judge_verdict → blocked"
+# out-of-range dimension score → block
+_crit "{\"judge_verdict\":true,\"overall_score\":7.4,\"screens\":[{\"name\":\"X\",\"score\":7,\"dimensions\":{\"hierarchy\":11,\"consistency\":8,\"a11y\":7,\"usability\":7,\"responsiveness\":7,\"performance\":7}}]}"
+python3 "$VC" "$TMP/crit.json" >/dev/null 2>&1 && bad "dimension score 11 not blocked" || ok "dimension score out of 1..10 → blocked"
+
+# ── T16. validate_edgecases — front edge-case spine (Step 3.7) ────────────────
+echo "[T16] validate_edgecases — traceability + directive floors"
+VE="$SCRIPTS_DIR/validate_edgecases.py"
+cat > "$TMP/ec_scr.json" <<'JSON'
+{"meta":{},"screens":[
+ {"id":"SCR_BOOK","name":"Booking","priority":"Must","layout_primitive":"form","flow_refs":["FL_BOOK"],"states":["error","empty"],"components":["form"],"route":"/book"},
+ {"id":"SCR_DASH","name":"Dashboard","priority":"Must","layout_primitive":"dashboard","flow_refs":["FL_BOOK"],"states":["empty","error"],"components":["chart"],"route":"/dash"}]}
+JSON
+cat > "$TMP/ec_flw.json" <<'JSON'
+{"navigation_model":"hub_spoke","flows":[{"id":"FL_BOOK","name":"Book","steps":[{"action":"x"}]}]}
+JSON
+cat > "$TMP/ec_intel.json" <<'JSON'
+{"data_density":{"overall_band":5},"error_tolerance":{"overall":"zero"},"decision_criticality":{"overall":"safety_critical"},"design_directives":{"guidance_level":"guided","safeguard_level":"strict"}}
+JSON
+cat > "$TMP/ec_good.json" <<'JSON'
+{"meta":{},"edge_cases":[
+ {"id":"EC1","ui_state":"error","correct_dim":"reference","category":"network","trigger":"API 502","expected_handling":"error + retry, keep values","severity":"must","maps_to_screen":"SCR_BOOK","maps_to_flow":"FL_BOOK"},
+ {"id":"EC2","ui_state":"error","correct_dim":"conformance","category":"validation","trigger":"bad phone","expected_handling":"inline FieldError + aria-invalid","severity":"must","maps_to_screen":"SCR_BOOK"},
+ {"id":"EC3","ui_state":"empty","correct_dim":"existence","category":"data","trigger":"no appts","expected_handling":"empty state + primary action","severity":"must","maps_to_screen":"SCR_BOOK"},
+ {"id":"EC4","ui_state":"error","correct_dim":"reference","category":"network","trigger":"dash load fail","expected_handling":"error + retry","severity":"must","maps_to_screen":"SCR_DASH"},
+ {"id":"EC5","ui_state":"empty","correct_dim":"existence","category":"data","trigger":"new user","expected_handling":"empty state + book CTA","severity":"must","maps_to_screen":"SCR_DASH"},
+ {"id":"EC6","ui_state":"partial","correct_dim":"cardinality","category":"data","trigger":"100s rows","expected_handling":"truncate + show more","severity":"must","maps_to_screen":"SCR_DASH"},
+ {"id":"EC7","ui_state":"error","correct_dim":"time","category":"destructive","trigger":"cancel appt","expected_handling":"type-to-confirm; undo within 5s","severity":"must","maps_to_screen":"SCR_BOOK"}]}
+JSON
+python3 "$VE" "$TMP/ec_good.json" "$TMP/ec_scr.json" "$TMP/ec_flw.json" "$TMP/ec_intel.json" >/dev/null 2>&1 && ok "valid full edge-case set (all floors satisfied) → exit 0" || bad "valid edge-case set rejected"
+# standalone — no cross-files → structure only, exit 0
+python3 "$VE" "$TMP/ec_good.json" >/dev/null 2>&1 && ok "standalone (no artifacts) → graceful exit 0" || bad "standalone run failed"
+# orphan maps_to_screen → block
+echo '{"edge_cases":[{"id":"E1","ui_state":"error","severity":"must","expected_handling":"x","maps_to_screen":"NOPE"}]}' > "$TMP/ec_x.json"
+python3 "$VE" "$TMP/ec_x.json" "$TMP/ec_scr.json" >/dev/null 2>&1 && bad "orphan maps_to_screen not blocked" || ok "orphan maps_to_screen → blocked"
+# bad enums → block
+echo '{"edge_cases":[{"id":"E1","ui_state":"glitch","correct_dim":"vibes","severity":"maybe","maps_to_screen":"SCR_BOOK"}]}' > "$TMP/ec_x.json"
+python3 "$VE" "$TMP/ec_x.json" "$TMP/ec_scr.json" >/dev/null 2>&1 && bad "bad ui_state/correct_dim/severity not blocked" || ok "bad enums → blocked"
+# declared empty/error state with no edge → block (declared states need a reason)
+# NB: capture to a var first — under `set -o pipefail`, `python(exit 1) | grep` returns python's
+# exit, so a direct pipe would mis-read a correct block as a failure.
+echo '{"edge_cases":[{"id":"E1","ui_state":"loading","category":"net","trigger":"x","expected_handling":"spinner","severity":"could","maps_to_screen":"SCR_BOOK"}]}' > "$TMP/ec_x.json"
+OUT="$(python3 "$VE" "$TMP/ec_x.json" "$TMP/ec_scr.json" 2>&1)"
+echo "$OUT" | grep -q "declares state" && ok "declared state with no edge → blocked" || bad "declared-state-needs-reason not enforced"
+# directive floor: zero error_tolerance forces a must input-validation edge on input screens.
+# Provide the error edge (satisfies the error floor) but NO validation edge, so the message under
+# test is the validation one specifically.
+echo '{"edge_cases":[{"id":"E1","ui_state":"error","correct_dim":"reference","category":"network","trigger":"x","expected_handling":"err+retry","severity":"must","maps_to_screen":"SCR_BOOK"}]}' > "$TMP/ec_x.json"
+OUT="$(python3 "$VE" "$TMP/ec_x.json" "$TMP/ec_scr.json" "$TMP/ec_flw.json" "$TMP/ec_intel.json" 2>&1)"
+echo "$OUT" | grep -q "input-validation edge" && ok "error_tolerance=zero floor (validation edge) → blocked" || bad "error_tolerance floor not enforced"
+# directive floor: high criticality forces destructive edge to must → block when 'should'
+echo '{"edge_cases":[{"id":"E1","ui_state":"error","category":"destructive","trigger":"x","expected_handling":"confirm","severity":"should","maps_to_screen":"SCR_BOOK"}]}' > "$TMP/ec_x.json"
+echo '{"data_density":{"overall_band":2},"error_tolerance":{"overall":"high"},"decision_criticality":{"overall":"high"},"design_directives":{"guidance_level":"expert","safeguard_level":"standard"}}' > "$TMP/ec_hi.json"
+OUT="$(python3 "$VE" "$TMP/ec_x.json" "$TMP/ec_scr.json" "$TMP/ec_flw.json" "$TMP/ec_hi.json" 2>&1)"
+echo "$OUT" | grep -q "destructive edge" && ok "criticality=high floor (destructive→must) → blocked" || bad "destructive floor not enforced"
+
+# ── T17. lint_edge_coverage — gate 9 (back end of the edge-case spine) ─────────
+echo "[T17] lint_edge_coverage — Must edge must be handled in the built screen"
+LEC="$SCRIPTS_DIR/lint_edge_coverage.py"
+PROTO9="$TMP/proto9"; mkdir -p "$PROTO9/app/book" "$PROTO9/app/dash"
+cat > "$TMP/c9_scr.json" <<'JSON'
+{"meta":{},"screens":[
+ {"id":"SCR_BOOK","name":"Booking","priority":"Must","layout_primitive":"form","route":"/book"},
+ {"id":"SCR_DASH","name":"Dashboard","priority":"Must","layout_primitive":"dashboard","route":"/dash"}]}
+JSON
+cat > "$TMP/c9_edges.json" <<'JSON'
+{"edge_cases":[
+ {"id":"EC1","ui_state":"error","correct_dim":"conformance","category":"validation","severity":"must","expected_handling":"x","maps_to_screen":"SCR_BOOK"},
+ {"id":"EC2","ui_state":"empty","category":"data","severity":"must","expected_handling":"x","maps_to_screen":"SCR_DASH"},
+ {"id":"EC3","ui_state":"error","category":"destructive","severity":"must","expected_handling":"x","maps_to_screen":"SCR_BOOK"}]}
+JSON
+printf 'export default function P(){return <form><FieldError/><input aria-invalid/><AlertDialog>cannot be undone</AlertDialog></form>}' > "$PROTO9/app/book/page.tsx"
+printf 'export default function P(){return <div>charts only</div>}' > "$PROTO9/app/dash/page.tsx"
+# DASH has no empty state → block
+python3 "$LEC" "$PROTO9" "$TMP/c9_edges.json" "$TMP/c9_scr.json" >/dev/null 2>&1 && bad "missing empty-state handling not blocked" || ok "Must empty edge unhandled → blocked (gate 9)"
+# add the empty state → pass
+printf 'export default function P(){return <div>No data yet. Get started.</div>}' > "$PROTO9/app/dash/page.tsx"
+python3 "$LEC" "$PROTO9" "$TMP/c9_edges.json" "$TMP/c9_scr.json" >/dev/null 2>&1 && ok "all Must edges handled (validation+confirm+empty) → exit 0" || bad "handled edges wrongly blocked"
+# should/could edges never block (only must)
+echo '{"edge_cases":[{"id":"E1","ui_state":"partial","category":"data","severity":"should","expected_handling":"x","maps_to_screen":"SCR_DASH"}]}' > "$TMP/c9_x.json"
+python3 "$LEC" "$PROTO9" "$TMP/c9_x.json" "$TMP/c9_scr.json" >/dev/null 2>&1 && ok "should/could edge → never blocks" || bad "non-must edge should not block"
+# audit_prototype wires gate 9 (edges= in summary)
+echo "$(python3 "$SCRIPTS_DIR/audit_prototype.py" "$PROTO9" --edges "$TMP/c9_edges.json" --screens "$TMP/c9_scr.json" 2>&1)" | grep -q "edges=" && ok "audit_prototype reports gate 9 (edges=)" || bad "gate 9 not wired into audit_prototype"
 
 # ── result ────────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────────────"

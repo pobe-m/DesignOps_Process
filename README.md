@@ -7,7 +7,7 @@ with accessibility and design quality checked automatically along the way.**
 
 Powered by Claude Code · Next.js 16 · shadcn/ui · Tailwind v4
 
-`Standalone` · `Offline-ready` · `WCAG-gated` · `138-brand aesthetic library` · `44/44 selftest`
+`Standalone` · `Offline-ready` · `WCAG-gated` · `138-brand aesthetic library` · `8-gate audit` · `89/89 selftest`
 
 </div>
 
@@ -68,8 +68,9 @@ runs. It works for any kind of product — there are no fixed industry templates
 | | |
 |---|---|
 | 🧠 **Product Intelligence** | Infers 10 measurable dimensions (each with evidence + confidence) → an open `design_directives` object. No fixed industry presets. |
-| 🎨 **Aesthetic Direction** | Picks one of **138 named design systems** (apple, linear, stripe, resend…) or an archetype, resolves it to **contrast-checked** tokens. Optionally infers the look from a TOR mockup. |
-| 🛡️ **Real gates, not vibes** | Every stage has a zero-dependency validator. The audit gate is a *script* with **5 checks** — hardcodes · WCAG contrast (oklch→sRGB, light + dark) · UX copy (no emoji/em-dash) · component-contracts · font-imports — exit 1 blocks handoff. |
+| 🎨 **Aesthetic Direction** | Picks one of **138 named design systems** (apple, linear, stripe, resend…) or an archetype, then resolves the **full identity token set** (surfaces, text, accent, border + dark theme — not just primary), **contrast-checked**, so the look actually flows into the prototype. Optionally infers it from a TOR mockup. |
+| 🛡️ **Real gates, not vibes** | Every stage has a zero-dependency validator. The audit gate is a *script* with **8 checks** — hardcodes · WCAG contrast (light + dark) · UX copy · component-contracts · font-imports · theme-fidelity · directive-fidelity · screen-coverage — exit 1 blocks handoff. |
+| 🧵 **Intent makes it to the build** | A traceability spine carries the contractual scope end-to-end: every **Must** feature and scored must-have is provably served by a task, a screen, and a built route — checked, not assumed. |
 | 🔁 **Scored quality loop** | Step 4.6 critique = 6 weighted dimensions + Nielsen's 10 heuristics + an anti-slop gate (Banned Defaults). |
 | 🧩 **19 design skills, folded in** | ux-writing, brandkit (DTCG tokens), image-to-code, migrate-design-system, performance, governance — vendored, standalone. See [`references/SKILLS.md`](.claude/skills/designops-pipeline/references/SKILLS.md). |
 | 📦 **Standalone** | The whole pipeline depends on no external repo — design system, brand library, and token kit are all vendored in. |
@@ -109,13 +110,13 @@ cd output/prototype && npm install && npm run dev   # → http://localhost:3000
 | Step | What it does | Output | Gate |
 |------|--------------|--------|------|
 | **1+2** | Read TOR → 8 categories + scoring criteria | `brief.md` · `brief.json` | `validate_brief.py` |
-| **2.5** | Product Intelligence — 10 dims → `design_directives` | `intelligence.json` | `validate_intelligence.py` |
-| **2.6** | Aesthetic Direction — pick + resolve tokens | `aesthetic.json` · `brand.config.json` | `validate_aesthetic.py` |
+| **2.5** | Product Intelligence — 10 dims → `design_directives` (+ feature traceability) | `intelligence.json` | `validate_intelligence.py` |
+| **2.6** | Aesthetic Direction — resolve the full identity theme | `aesthetic.json` · `brand.config.json` | `validate_aesthetic.py` |
 | **3** | Refine user flows from directives | `flows.json` | `validate_flows.py` |
-| **3.5** | Screens from flows + DS mapping | `screen-inventory.json` · `design-first-draft.md` | `validate_screens.py` |
+| **3.5** | Screens from flows + DS mapping (+ feature/scoring coverage) | `screen-inventory.json` · `design-first-draft.md` | `validate_screens.py` |
 | **4** | Scaffold the Next.js prototype | `output/prototype/` | — |
 | **4.6** | Scored critique → auto-fix critical + quick wins | `docs/critique.md` | (agent) |
-| **4.7** | **Audit gate** — 5 checks: token · WCAG · copy · contracts · font | `docs/audit-report.md` | `audit_prototype.py` 🔴 exit 1 |
+| **4.7** | **Audit gate** — 8 checks (token · WCAG · copy · contracts · font · theme · directive · screens) | `docs/audit-report.md` | `audit_prototype.py` 🔴 exit 1 |
 | **4.8** | Storybook QA (opt-in) | — | `addon-a11y` axe pass |
 | **5** | Figma output (5 pages: Cover/Foundations/Components/Screens/Flows) — generated from artifacts | Figma file | `figma_prep.py` + Figma MCP |
 
@@ -151,11 +152,15 @@ instead of the neutral shadcn default ("design slop").
   Browse: `python3 …/aesthetics/scripts/design_systems.py list | search <term> | show <name>`.
 - **Anti-slop first** — name the one `mood_adjective` the result must earn before any token.
 - **From a mockup** — if the TOR ships a screenshot, infer the direction from it ([`image-to-code.md`](.claude/skills/designops-pipeline/references/image-to-code.md)).
+- **Full identity, not just a primary** — it resolves the whole semantic set (surfaces, text
+  hierarchy, accent, border) for **light *and* dark**, so the chosen system's character actually
+  lands instead of a brand colour slapped on a neutral skeleton.
 - **Gate** — `validate_aesthetic.py` **recomputes WCAG contrast from the hex values itself**
-  (never trusts the agent), requires the chosen system to resolve in the library, and forces
-  `a11y_target`/`density_target` to echo `design_directives`.
+  (never trusts the agent), requires the chosen system to resolve in the library, demands the full
+  light+dark identity set, and forces `a11y_target`/`density_target` to echo `design_directives`.
 
-Output `aesthetic.json` + a ready-to-apply `output/brand.config.json` for `/generate-prototype`.
+Output `aesthetic.json` + a ready-to-apply `output/brand.config.json` (carrying the whole theme) for
+`/generate-prototype` — and audit **gate 6** blocks if the build regresses to neutral.
 
 ---
 
@@ -182,6 +187,13 @@ python3 .claude/skills/designops-pipeline/scripts/audit_prototype.py \
 | 3 | **UX copy** | no emoji / em-dash in product UI | 🔴 block |
 | 4 | **Component contracts** | `lint_component_contracts.py` — icon-only buttons need a name, every `DialogContent` a `DialogTitle`, labelled `Input` a matching `FieldLabel htmlFor` | 🔴 block |
 | 5 | **Font imports** | `lint_font_imports.py` — no remote-font CSS `@import` (500s the Turbopack dev server; use `next/font`) | 🔴 block |
+| 6 | **Theme fidelity** | `lint_theme_fidelity.py` — the identity theme Step 2.6 committed in `brand.config.json` is actually applied in `globals.css` (no regression to the neutral default) | 🔴 block |
+| 7 | **Directive fidelity** | `lint_directive_fidelity.py` — the build honors `design_directives`: destructive actions guarded when `safeguard_level` is on, an empty-state when `guidance_level` is guided (density/nav advisory) | 🔴 block |
+| 8 | **Screen coverage** | `lint_screen_coverage.py` — every **Must** screen in `screen-inventory.json` was built as an `app/<route>/page.tsx` rendering its declared loading/empty/error states | 🔴 block |
+
+> Gates 6-8 auto-discover their source artifact (`brand.config.json` / `intelligence.json` /
+> `screen-inventory.json`) beside the prototype, or take `--theme` / `--intel` / `--screens`, and
+> skip cleanly when it is absent.
 
 > **Exit 1 = BLOCKED** — handoff/Figma is blocked until it passes. Categories are machine-checked,
 > not eyeballed. It audits the **generated surface only** (`components/ui` and any `docs/` dir are
@@ -251,7 +263,7 @@ Designops-project-test/
 │   │   ├── validate_{brief,intelligence,flows,screens,aesthetic}.py
 │   │   ├── audit_prototype.py            #    Step 4.7 gate (5: token·WCAG·copy·contracts·font)
 │   │   ├── lint_{hardcodes,component_contracts,font_imports}.py
-│   │   └── selftest.sh                   #    44/44 regression guard
+│   │   └── selftest.sh                   #    89/89 regression guard
 │   └── references/
 │       ├── aesthetics/                   #    🎨 138-brand library + taste + contrast.py
 │       ├── tokens/                       #    DTCG token foundation + validators (brandkit)
@@ -285,25 +297,37 @@ Designops-project-test/
 
 ---
 
-## ✅ Prerequisites
+## ✅ Requirements
 
-| Requirement | Why |
-|-------------|-----|
-| **Claude Code** | Drives the reading & generation. Without it the runner only stages prompts. **Required.** |
-| **Node.js ≥ 18** | Build the prototype (`npm install && npm run dev`) + the token bridge. |
-| **Python 3** | Every validator gate + the DS inventory scan. Zero-dependency. |
-| **poppler** (`pdftotext`) | Better PDF text extraction. Optional — falls back to Claude reading the PDF. `brew install poppler`. |
+| Requirement | Needed for | Notes |
+|-------------|-----------|-------|
+| **Claude Code** | reading the TOR + generating every artifact | **Required.** Without it the runner only stages prompts and produces no output. |
+| **Python ≥ 3.9** | every validator + audit gate + DS inventory scan | **Stdlib only — no `pip install`.** (3.9+ for `list[str]` typing.) |
+| **Node.js ≥ 18** | building the prototype (`npm install && npm run dev`) | The vendored DS is **source-only** — the *first* prototype build runs `npm install` (needs network once); later builds reuse `node_modules` offline. |
+| **poppler** (`pdftotext`) | better PDF text extraction | Optional — falls back to Claude reading the PDF. `brew install poppler`. |
+| Playwright · Lighthouse · Figma MCP | Steps 4.7b / performance / 5 | Optional — these steps **skip cleanly** when the tool is absent. |
+
+**Cloning this repo to use elsewhere?** It is designed to run **standalone and offline** by default:
+no absolute paths, the design system is vendored in-repo, and the validators are pure stdlib. Two
+things to know:
+
+- **Don't pass `--ds-import`.** That flag pulls the private `@npsin-oreo/design-system` package; you
+  won't have access. The default (and `--ds-auto`) use the in-repo `./design-system` via rsync, which
+  is what you want.
+- A few doc links point at the author's hosted **Storybook** (`npsin-oreo.github.io`). The same
+  contracts are vendored locally in `references/component-variants.generated.md`, so nothing breaks.
 
 ---
 
 ## 🧪 Tests
 
 ```bash
-bash .claude/skills/designops-pipeline/scripts/selftest.sh        # 44/44, runs on macOS stock bash 3.2
+bash .claude/skills/designops-pipeline/scripts/selftest.sh        # 89/89, runs on macOS stock bash 3.2
 ```
 
-Covers bash-3.2 compatibility, every validator (valid passes / invalid fails), the aesthetic +
-audit gates (fake brand, low contrast, hardcode, emoji all blocked), and the DTCG token gates.
+Covers bash-3.2 compatibility, every validator (valid passes / invalid fails), the full 8-gate audit
+(fake brand, low contrast, hardcode, emoji, neutral-theme regression, missing safeguard, unbuilt Must
+screen all blocked), feature/scoring traceability, and the DTCG token gates.
 **Run it after editing any script** in `.claude/skills/designops-pipeline/scripts/`.
 
 ---
@@ -322,9 +346,18 @@ against a repo that still ships `brand.config.json` + `npm run brand:build` (nev
 
 ---
 
+## 📜 License
+
+Pipeline code in this repo is **MIT** — see [`LICENSE`](LICENSE). To stay standalone it **vendors**
+third-party material (shadcn/ui, the shadcn-skills-design-starter design system + skills, the
+runtime-audit from ux-ui-agent-skills), each under its own upstream license — see [`NOTICE`](NOTICE)
+for attributions. Verify the upstream terms before redistributing.
+
+---
+
 ## 🧰 Tech stack
 
-`Next.js 16` · `React 19` · `Tailwind CSS v4` · `shadcn/ui` · `Claude Code` · `Python 3 (stdlib only)`
+`Next.js 16` · `React 19` · `Tailwind CSS v4` · `shadcn/ui` · `Claude Code` · `Python 3.9+ (stdlib only)`
 
 <div align="center">
 <sub>Built for the DesignOps team · every gate is a script, not a vibe</sub>

@@ -12,10 +12,13 @@ description: >
   Step 2.5 (Product Intelligence Layer) infers 10 measurable product dimensions and derives an
   open design_directives object (density, a11y target, safeguards, navigation) — industry-agnostic.
   Step 2.6 (Aesthetic Direction) picks one of 138 named design systems or an archetype and resolves
-  it into concrete, contrast-checked tokens (the visual/taste layer) → aesthetic.json + brand.config.json.
+  it into the full identity token set (surfaces/text/accent/border + dark theme, not just primary),
+  contrast-checked, + a signature → aesthetic.json + a brand.config.json that carries the whole theme.
+  Step 3.7 (Edge-Case Analysis → edge-cases.json) enumerates the non-happy-path conditions every Must
+  screen must survive, via UI Stack × CORRECT, severity driven by the Step 2.5 directives.
   Step 4 builds a POC prototype from a ready-made component library + mock data, Step 4.6 runs a
-  scored critique (6 weighted dimensions + Nielsen + anti-slop), Step 4.7 is a runnable audit gate
-  (audit_prototype.py: tokens + WCAG contrast in light/dark + no-emoji + component contracts + no remote-font @import) before handoff.
+  scored critique (6 weighted dimensions + Nielsen + anti-slop + a separate judge pass), Step 4.7 is a runnable audit gate
+  (audit_prototype.py — 9 gates: tokens + WCAG contrast in light/dark + no-emoji + component contracts + no remote-font @import + theme fidelity + directive fidelity + screen coverage + edge-case coverage) before handoff.
   UX layers feed the pipeline: Step 2.3 (User Research → research.json: personas/JTBD/pains) and
   Step 2.4 (Competitive Analysis → competitive.json) supply evidence to Step 2.5; Step 4.8
   (Usability Test → usability.json: heuristic + automated + simulated persona walkthrough) runs on
@@ -65,6 +68,10 @@ TOR (PDF / DOCX / Notion / GDocs)
                     │  screen-inventory.json       │  ← validate_screens.py (flow→screen coverage)
                     │  + design-first-draft.md     │     (human breakdown view)
                     └──────────┬───────────────────┘
+                               ▼  Step 3.7  Edge-Case Analysis (UI Stack × CORRECT)
+                    ┌──────────────────────────────┐
+                    │  edge-cases.json             │  ← validate_edgecases.py (trace + directive floors)
+                    └──────────┬───────────────────┘
                                │
                                ▼  Step 4
               ┌────────────────────────────────┐
@@ -78,8 +85,8 @@ TOR (PDF / DOCX / Notion / GDocs)
               │      └── ...                   │
               └────────────────────────────────┘
                                │
-                               ▼  Step 4.6  critique (4-layer) → fix
-                               ▼  Step 4.7  audit gate (token + WCAG)
+                               ▼  Step 4.6  critique (4-layer + judge) → fix
+                               ▼  Step 4.7  audit gate (9 gates: token + WCAG + … + edge coverage)
                                │            🔴 critical = block handoff
                                ▼  Step 5 (separate pipeline)
               ┌────────────────────────────────┐
@@ -558,6 +565,52 @@ After generating, log:
 
 ---
 
+## Step 3.7 — Edge-Case Analysis
+
+> Read `references/edge-cases-layer.md` first (taxonomy + generation prompt + citations). Runs after
+> Screen Inventory, before the build — once flows + screens exist but before anything is coded.
+
+The **front end of the edge-case spine.** Enumerate the non-happy-path conditions every Must screen
+has to survive — empty data, bad input, a failed request, a destructive click — so the build has a
+contract to satisfy and Step 4.7 **gate 9** has something to verify. Same traceability shape as the
+intent spine (`feature → task → flow → screen → route`), with **edge case** as one more contract.
+
+The taxonomy is **not** invented per project — it is the cross-product of two established frameworks
+(so a reviewer can trace the reasoning to a source):
+- **The UI Stack** (Scott Hurff) — every screen has five states: **Ideal · Empty · Error · Partial ·
+  Loading**. The `ui_state` axis; maps onto `screen-inventory.json`'s declared `states`.
+- **CORRECT** (Hunt & Thomas, *Pragmatic Unit Testing*) — seven boundary dims for input/data:
+  **C**onformance · **O**rdering · **R**ange · **R**eference · **E**xistence · **C**ardinality ·
+  **T**ime. The `correct_dim` axis.
+
+Walk every Must screen through the UI Stack, walk its data through CORRECT, then **set severity from
+`intelligence.json`, not taste**: low/zero `error_tolerance` forces error + input-validation edges to
+`must`; high/safety_critical `decision_criticality` forces destructive confirms (and undo) to `must`;
+dense `data_density` forces a partial/overflow edge; `guidance_level=guided` forces an empty edge.
+
+```jsonc
+edge-cases.json = { meta: { …, driven_by: { error_tolerance, decision_criticality, … } },
+  edge_cases: [{ id, ui_state: "empty|error|partial|loading|ideal",
+    correct_dim: "conformance|ordering|range|reference|existence|cardinality|time",  // optional
+    category, trigger, expected_handling, severity: "must|should|could",
+    maps_to_screen: "<screen-inventory id>", maps_to_flow: "<flows id>" }] }
+```
+
+Gate: `validate_edgecases.py {OUTPUT_DIR}/edge-cases.json {OUTPUT_DIR}/screen-inventory.json {OUTPUT_DIR}/flows.json {OUTPUT_DIR}/intelligence.json`
+— enforces id/enum structure, **traceability** (every edge maps to a real screen/flow), the
+**declared-state-needs-a-reason** rule (a Must screen that declares an empty/error state has ≥1 edge
+explaining it), and the **directive floors** above. Cross-file artifacts are optional → the gate
+skips dependent checks with a warning when one is absent (runs standalone).
+
+After generating, log:
+```
+[designops-pipeline] ✓ Step 3.7 edge-case analysis
+  → {OUTPUT_DIR}/edge-cases.json
+  Edge cases: [N] ([X] must / [Y] should / [Z] could) · floors: error_tol=[…] criticality=[…]
+```
+
+---
+
 ## Step 4 — POC Delivery Package
 
 Takes `design-first-draft.md` → scaffolds a Next.js prototype using `shadcn-skills-design-starter` as the base
@@ -849,13 +902,29 @@ Output (per screen or combined): the scored table + a prioritized findings table
 ### ⚡ Quick Wins (< 15 min)        — [high-impact fixes]
 ```
 
+7. **Judge pass (separate from the build).** The agent that built the prototype also wrote the
+   scores above, so they skew optimistic. Run one more pass **in a skeptical judge's voice** — its
+   only job is a pass/fail: *would a real, demanding user of this product accept this for the job
+   it's for?* Look for the failure the optimism glossed over (a dead primary action, an unreachable
+   state, a region that "looks done" but is empty). Record a single `judge_verdict` (true|false) +
+   `judge_reason`. **A `false` verdict caps `overall_score` at 2.0** — looks never rescue a broken
+   core task. Schema + rationale: `references/critique-framework.md` → "Structured output + judge".
+
 **Auto-fix rule:** fix every 🔴 Critical + ⚡ Quick Win immediately in the prototype · log 🟡 High in `poc-handoff.md` for Dev
-Save the full critique to `{OUTPUT_DIR}/prototype/docs/critique.md`
+
+Save **both** outputs beside the prototype:
+- `{OUTPUT_DIR}/prototype/docs/critique.md` — the full prose critique (for the designer)
+- `{OUTPUT_DIR}/prototype/docs/critique.json` — the structured scores + judge verdict (for the gate)
+
+Then run the gate (blocks if the judge verdict and the score disagree):
+```bash
+python3 .claude/skills/designops-pipeline/scripts/validate_critique.py {OUTPUT_DIR}/prototype/docs/critique.json
+```
 
 When done, log:
 ```
 [designops-pipeline] ✓ Step 4.6 critique
-  Screens reviewed: [X] · Critical fixed: [Y] · Quick wins applied: [Z] · High → handoff: [W]
+  Screens reviewed: [X] · Judge verdict: [pass/fail] · Overall: [N]/10 · Critical fixed: [Y] · Quick wins applied: [Z] · High → handoff: [W]
 ```
 
 ---
@@ -887,6 +956,12 @@ Audit the prototype across 3 categories (see the severity matrix in the referenc
 > …and a **component-contract gate** (gate 4, via `scripts/lint_component_contracts.py`): enforces the Button/Dialog/Field usage contracts from `references/component-contracts.md` as runnable a11y checks — icon-only buttons need an accessible name, every `DialogContent`/`AlertDialogContent` needs a `DialogTitle`, every `Input` with an `id` needs a matching `FieldLabel htmlFor` → 🔴 block. Fuzzier rules (one-primary-per-view, missing `DialogDescription`, destructive-variant, `aria-invalid` on errored fields) print as **advisories** and never fail the gate. Escape a justified case with a `ds-allow-contract` comment.
 
 > …and a **font-loading gate** (gate 5, via `scripts/lint_font_imports.py`): a remote-font CSS `@import` (`fonts.googleapis.com` etc.) in `globals.css` → 🔴 block — it 500s the Turbopack dev server; load fonts with `next/font` instead.
+
+> …and a **theme-fidelity gate** (gate 6, via `scripts/lint_theme_fidelity.py`): the full identity theme Step 2.6 committed in `brand.config.json` (`colors.{light,dark}`) must actually be applied in the prototype's `globals.css`. If `card`/`secondary`/`muted`/`accent`/`border` or the dark set drifted back to the shadcn-neutral default — the "brand colour slapped on a neutral skeleton" regression — it 🔴 blocks. It compares the committed value to the rendered token (oklch→sRGB, same math as gate 2), so it is deterministic, not a judgement call. Discovers `brand.config.json` beside the prototype, or pass `--theme <path>`; skips cleanly when no theme is committed.
+
+> …**directive-fidelity** (gate 7, `scripts/lint_directive_fidelity.py`) and **screen-coverage** (gate 8, `scripts/lint_screen_coverage.py`) close the **intent-traceability spine** — the build must honor the upstream intent, not just look right. Gate 7 reads `intelligence.json`: a destructive action must be guarded by an `AlertDialog`/confirm when `safeguard_level` ∈ {standard,strict,maximal}, and a guided product (`guidance_level=guided`) must render at least one empty-state (density/nav are advisory). Gate 8 reads `screen-inventory.json`: every **Must** screen must exist as a built `app/<route>/page.tsx` and render each declared `state` (loading/empty/error). Both auto-discover their artifact beside the prototype (or `--intel`/`--screens`) and skip cleanly when absent. They are the build-side end of the feature→task→flow→screen→route traceability that `validate_intelligence.py` (every Must `core_feature` is served by a task via `feature_refs`) and `validate_screens.py` (every Must feature + every `scoring_criteria` must-have has a screen) enforce upstream.
+
+> …**edge-case coverage** (gate 9, `scripts/lint_edge_coverage.py`) closes the **edge-case spine** — the back end of Step 3.7. It reads `edge-cases.json`: every **Must** edge case must have detectable handling in the screen it maps to — an empty/error/loading/partial state, inline validation (`FieldError`/`aria-invalid`/schema), or a destructive confirm (`AlertDialog`/type-to-confirm), chosen by the edge's `ui_state`/`category`. It resolves each `maps_to_screen` to a route via `screen-inventory.json` (or scans the whole app as a coarse fallback), auto-discovers `edge-cases.json` beside the prototype (or `--edges`), and skips cleanly when absent. This is the build-side end of the `screen → edge case` traceability that `validate_edgecases.py` enforces upstream (every edge traces to a real screen + the directive floors), so a screen can't ship with only its happy path.
 
 > **a11y target** comes from `intelligence.json` → `design_directives.a11y_target` (Step 2.5 already enforced the floor + public-sector ⇒ AAA invariant). Pass it straight to `--a11y` (the script maps `AA_plus`→AAA).
 

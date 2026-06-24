@@ -9,8 +9,12 @@ aesthetic.json picks a visual direction (a named system from the 138-brand libra
 archetype) and resolves it into concrete tokens. This gate checks that:
   • the chosen named_system actually exists in references/aesthetics/design-systems/library/
   • a mood adjective was committed (anti-slop: generating before deciding = slop)
-  • the token set is complete + emits a ready-to-drop brand.config
-  • EVERY contrast pair is independently re-computed from hex and meets the a11y target
+  • the FULL identity color set (surfaces, text hierarchy, accent, border) is resolved for
+    light AND dark — not just primary/background/foreground. The old narrow contract let the
+    prototype's card/secondary/muted/border stay at the shadcn-neutral default ("just slap the
+    brand color on" → plain). brand_config must carry that whole theme, faithfully.
+  • EVERY contrast pair is independently re-computed from hex and meets the a11y target;
+    text-on-surface pairs (card, secondary, …) are required, not just primary.
   • constraints echo intelligence.design_directives (a11y_target, density_target)
 """
 
@@ -31,10 +35,56 @@ REQUIRED_TOP_KEYS = ["meta", "brief_inference", "direction", "tokens", "contrast
                      "constraints", "brand_config"]
 DIRECTION_TYPES = {"named_system", "archetype"}
 MOTION_DEPTH = {"none", "subtle", "expressive"}
-REQUIRED_TOKENS = ["primary", "background", "foreground", "radius", "font_sans"]
-REQUIRED_BRAND_CONFIG = ["project_name", "primary", "radius", "font_sans"]
+
+# ── the identity token contract (what makes a theme not-"plain") ───────────────
+# These are the DS's own semantic color tokens. The bridge USED to carry only
+# primary/background/foreground → the prototype's card/secondary/muted/accent/border
+# stayed at the shadcn-neutral default ("just slap the brand color on"). 2.6 must now
+# resolve the full identity set, light AND dark, so the look actually flows through.
+IDENTITY_REQUIRED = [
+    "background", "foreground", "card", "card-foreground",
+    "primary", "primary-foreground", "secondary", "secondary-foreground",
+    "muted", "muted-foreground", "accent", "accent-foreground", "border",
+]
+IDENTITY_RECOMMENDED = ["popover", "popover-foreground", "destructive", "input", "ring"]
+IDENTITY_ALL = IDENTITY_REQUIRED + IDENTITY_RECOMMENDED
+SCALAR_REQUIRED = ["radius", "font_sans"]
+REQUIRED_BRAND_CONFIG = ["project_name", "radius", "font_sans"]  # + must carry the colors block
+
+# optional signature block — non-color identity expressed via existing Tailwind utilities
+SIGNATURE_ENUMS = {
+    "border_style": {"solid", "translucent", "none"},
+    "elevation": {"flat", "soft", "layered"},
+    "type_weight": {"regular", "medium", "semibold"},
+    "tracking": {"tighter", "tight", "normal", "wide"},
+}
+# contrast pairs the gate insists on (recomputed from hex below). text-on-surface = error.
+REQUIRED_CONTRAST_PAIRS = {
+    "foreground/background", "primary-foreground/primary",
+    "card-foreground/card", "secondary-foreground/secondary",
+}
+# note: border/background is deliberately NOT here — a subtle aesthetic border legitimately
+# sits below the 3:1 UI floor (audit_prototype.py treats it as advisory too).
+RECOMMENDED_CONTRAST_PAIRS = {
+    "muted-foreground/background", "accent-foreground/accent",
+}
 # WCAG normal-text thresholds by target
 WCAG_MIN = {"A": 4.5, "AA": 4.5, "AAA": 7.0}
+
+
+def _colors(node):
+    """Light/dark color dicts from a tokens|brand_config node — supports nested + flat.
+
+    Nested (new):  node.colors = {light:{...}, dark:{...}}
+    Flat (legacy): identity colors live directly on the node (dark is then unknown → None).
+    """
+    if not isinstance(node, dict):
+        return {}, None
+    colors = node.get("colors")
+    if isinstance(colors, dict):
+        return (colors.get("light") or {}), colors.get("dark")
+    flat = {k: node[k] for k in IDENTITY_ALL if k in node}
+    return flat, None
 
 
 def _load(path):
@@ -94,21 +144,54 @@ def validate(aesthetic_path, intel_path=None, contract_path=None):
             if name not in ref:
                 warnings.append(f"direction.spec_ref should point at library/{name}/DESIGN.md")
 
-    # ── tokens (complete enough to render + theme) ────────────────────────────────
+    # ── tokens: the full identity color set (light + dark), not just primary ───────
     tok = d["tokens"]
-    for t in REQUIRED_TOKENS:
-        if not tok.get(t):
-            errors.append(f"tokens.{t} is required")
+    dark_mode = d.get("constraints", {}).get("dark_mode", True)
+    light, dark = _colors(tok)
+    for c in IDENTITY_REQUIRED:
+        if not light.get(c):
+            errors.append(f"tokens.colors.light.{c} is required — resolve the FULL identity set "
+                          "from the system's DESIGN.md, not just primary (this is the anti-'plain' fix)")
+    for c in IDENTITY_RECOMMENDED:
+        if not light.get(c):
+            warnings.append(f"tokens.colors.light.{c} not resolved — recommended for fidelity")
+    for s in SCALAR_REQUIRED:
+        if not tok.get(s):
+            errors.append(f"tokens.{s} is required")
+    if dark_mode is not False:
+        if not dark:
+            errors.append("tokens.colors.dark is required when constraints.dark_mode != false — "
+                          "a system's dark identity is not a tinted light theme; resolve it explicitly")
+        else:
+            for c in IDENTITY_REQUIRED:
+                if not dark.get(c):
+                    errors.append(f"tokens.colors.dark.{c} is required (dark_mode is on)")
 
-    # ── brand_config (ready to drop as brand.config.json) ─────────────────────────
+    # ── brand_config: ready-to-drop brand.config.json — must CARRY the whole theme ─
     bc = d["brand_config"]
     for t in REQUIRED_BRAND_CONFIG:
         if not bc.get(t):
             errors.append(f"brand_config.{t} is required (this becomes brand.config.json)")
-    # brand_config must agree with the resolved tokens
-    for field in ("primary", "radius", "font_sans"):
+    bc_light, _bc_dark = _colors(bc)
+    for c in IDENTITY_REQUIRED:
+        if not bc_light.get(c):
+            errors.append(f"brand_config.colors.light.{c} is required — brand.config.json must carry "
+                          "the full theme, else generate-prototype falls back to the neutral default")
+    # brand_config must AGREE with the resolved tokens (the bridge has to be faithful)
+    for field in ("radius", "font_sans", "font_mono"):
         if bc.get(field) and tok.get(field) and bc[field] != tok[field]:
             errors.append(f"brand_config.{field} ({bc[field]!r}) must equal tokens.{field} ({tok[field]!r})")
+    for c in IDENTITY_REQUIRED:
+        if bc_light.get(c) and light.get(c) and bc_light[c] != light[c]:
+            errors.append(f"brand_config.colors.light.{c} ({bc_light[c]!r}) must equal "
+                          f"tokens.colors.light.{c} ({light[c]!r})")
+
+    # ── signature (optional): non-color identity, validated against enums ─────────
+    sig = d.get("signature") or bi.get("signature") or {}
+    if isinstance(sig, dict):
+        for k, v in sig.items():
+            if k in SIGNATURE_ENUMS and v not in SIGNATURE_ENUMS[k]:
+                errors.append(f"signature.{k} must be one of {sorted(SIGNATURE_ENUMS[k])} (got {v!r})")
 
     # ── constraints must echo the upstream directives ─────────────────────────────
     cons = d["constraints"]
@@ -155,10 +238,13 @@ def validate(aesthetic_path, intel_path=None, contract_path=None):
             claimed = c.get("ratio")
             if isinstance(claimed, (int, float)) and abs(claimed - r) > 0.2:
                 warnings.append(f"contrast_checks '{label}' self-reported {claimed}:1 but actual is {r:.2f}:1")
-        need = {"foreground/background", "primary-foreground/primary"}
-        missing = need - pairs_seen
-        if missing:
-            warnings.append(f"contrast_checks is missing recommended pairs: {sorted(missing)}")
+        missing_req = REQUIRED_CONTRAST_PAIRS - pairs_seen
+        if missing_req:
+            errors.append(f"contrast_checks is missing required text-on-surface pairs: {sorted(missing_req)} "
+                          "— every surface that carries text must be contrast-verified, not just primary")
+        missing_rec = RECOMMENDED_CONTRAST_PAIRS - pairs_seen
+        if missing_rec:
+            warnings.append(f"contrast_checks is missing recommended pairs: {sorted(missing_rec)}")
 
     # ── token contract (optional — only when a DS token-contract.json is given) ───
     # The DS repo owns which tokens are themeable; DesignOps 2.6 may only set those.
@@ -172,12 +258,15 @@ def validate(aesthetic_path, intel_path=None, contract_path=None):
             if not allowed:
                 warnings.append("token contract lists no tokens — skipped contract check")
             else:
-                NON_TOKEN = {"project_name"}  # brand_config metadata, not a themeable token
+                # metadata / structural keys that are not themeable DS tokens
+                NON_TOKEN = {"project_name", "colors", "dark_mode", "signature"}
                 pkg = contract.get("package", "the DS")
                 for src in ("tokens", "brand_config"):
-                    for k in (d.get(src) or {}):
-                        if k in NON_TOKEN:
-                            continue
+                    node = d.get(src) or {}
+                    src_light, src_dark = _colors(node)
+                    keys = set(src_light) | set(src_dark or {})           # nested color tokens
+                    keys |= {k for k in node if k not in NON_TOKEN}        # flat scalars (radius, font_*)
+                    for k in keys:
                         if k not in allowed:
                             errors.append(f"{src}.{k!r} is not in {pkg}'s token contract — "
                                           "2.6 may only theme tokens the design system exposes")
@@ -209,9 +298,13 @@ def main():
         d = json.load(f)
     dir_ = d.get("direction", {})
     bi = d.get("brief_inference", {})
+    _light, _dark = _colors(d.get("tokens", {}))
+    sig = d.get("signature") or bi.get("signature") or {}
     print("[validate_aesthetic] ✓ Valid")
     print(f"  Direction  : {dir_.get('type')} · {dir_.get('name')}  [{dir_.get('category', '—')}]")
-    print(f"  Mood       : {bi.get('mood_adjective')} · motion={bi.get('motion_depth', '—')}")
+    print(f"  Mood       : {bi.get('mood_adjective')} · motion={bi.get('motion_depth', '—')}"
+          + (f" · signature={sig}" if sig else ""))
+    print(f"  Identity   : {len(_light)} light tokens" + (f" + {len(_dark)} dark" if _dark else " (light only)"))
     print(f"  a11y target: {d.get('constraints', {}).get('a11y_target')} · "
           f"contrast pairs verified: {len(d.get('contrast_checks', []))}")
     for w in warnings:

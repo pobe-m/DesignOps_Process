@@ -1,0 +1,53 @@
+DesignOps Pipeline — Third-Party Notices
+=========================================
+
+This repository is self-contained: to stay standalone and offline-capable it
+*vendors* (bundles a copy of) several third-party works. The MIT License in
+LICENSE covers the original pipeline code authored here. The vendored material
+below remains under its own upstream license — verify the upstream terms before
+redistributing.
+
+-----------------------------------------------------------------------------
+1. shadcn/ui  —  ./design-system/components/ui/
+-----------------------------------------------------------------------------
+shadcn/ui components (Radix UI + Tailwind, copy-into-your-repo model).
+License: MIT.  Upstream: https://github.com/shadcn-ui/ui
+Radix UI primitives and lucide-react icons are likewise MIT.
+
+-----------------------------------------------------------------------------
+2. shadcn-skills-design-starter  —  ./design-system/  and the 19 folded design
+   skills under .claude/skills/designops-pipeline/references/
+-----------------------------------------------------------------------------
+The vendored design system (source-only) and the design skills folded into the
+pipeline (aesthetics, brandkit, ux-writing, image-to-code, migrate-design-system,
+governance, performance, critique, audit, tokens, component-contracts, etc.)
+originate from the shadcn-skills-design-starter project. Refer to that project's
+repository for its exact license terms.
+
+-----------------------------------------------------------------------------
+3. ux-ui-agent-skills  —  .claude/skills/designops-pipeline/references/runtime-audit/
+-----------------------------------------------------------------------------
+The optional Step 4.7b runtime audit (Playwright + axe-core, focus-trap and
+render-based anti-slop checks) is vendored from the ux-ui-agent-skills project.
+Refer to that project's repository for its exact license terms.
+
+-----------------------------------------------------------------------------
+4. Design Tokens (DTCG) format  —  references/.../tokens/
+-----------------------------------------------------------------------------
+Token files follow the Design Tokens Community Group format
+(https://design-tokens.github.io/community-group/format/). The schema is a
+community specification; the token *values* in this repo are authored here.
+
+-----------------------------------------------------------------------------
+5. Named design-system library (138 systems)  —  references/aesthetics/design-systems/
+-----------------------------------------------------------------------------
+Prose design specifications "inspired by" public products (Apple, Linear,
+Stripe, Vercel, Notion, Resend, etc.). These are original written descriptions
+used to steer aesthetic direction; product names and trademarks belong to their
+respective owners and are referenced for identification only.
+
+-----------------------------------------------------------------------------
+Build-time dependencies (NOT vendored — installed via npm for the prototype):
+Next.js, React, Tailwind CSS, and the packages in design-system/package.json,
+each under its own license.
+-----------------------------------------------------------------------------
