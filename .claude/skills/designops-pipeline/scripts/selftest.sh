@@ -31,7 +31,7 @@ for s in "$RUN" "$SCRIPTS_DIR/setup-prototype.sh" "$0"; do
   [ -f "$s" ] || continue
   /bin/bash -n "$s" 2>/dev/null && ok "syntax: $(basename "$s")" || bad "syntax: $(basename "$s")"
 done
-for p in "$VALIDATE" "$VALIDATE_INTEL" "$SCRIPTS_DIR/validate_flows.py" "$SCRIPTS_DIR/validate_screens.py" "$SCRIPTS_DIR/validate_aesthetic.py" "$SCRIPTS_DIR/validate_research.py" "$SCRIPTS_DIR/validate_competitive.py" "$SCRIPTS_DIR/validate_usability.py" "$SCRIPTS_DIR/validate_critique.py" "$SCRIPTS_DIR/validate_edgecases.py" "$SCRIPTS_DIR/audit_prototype.py" "$SCRIPTS_DIR/lint_hardcodes.py" "$SCRIPTS_DIR/lint_edge_coverage.py" "$SCRIPTS_DIR/lint_font_fidelity.py" "$SCRIPTS_DIR/../references/ux-writing/scripts/check_no_emoji.py"; do
+for p in "$VALIDATE" "$VALIDATE_INTEL" "$SCRIPTS_DIR/validate_flows.py" "$SCRIPTS_DIR/validate_screens.py" "$SCRIPTS_DIR/validate_aesthetic.py" "$SCRIPTS_DIR/validate_research.py" "$SCRIPTS_DIR/validate_competitive.py" "$SCRIPTS_DIR/validate_usability.py" "$SCRIPTS_DIR/validate_critique.py" "$SCRIPTS_DIR/validate_edgecases.py" "$SCRIPTS_DIR/audit_prototype.py" "$SCRIPTS_DIR/lint_hardcodes.py" "$SCRIPTS_DIR/lint_edge_coverage.py" "$SCRIPTS_DIR/lint_font_fidelity.py" "$SCRIPTS_DIR/lint_axis_fidelity.py" "$SCRIPTS_DIR/../references/ux-writing/scripts/check_no_emoji.py"; do
   python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$p" 2>/dev/null && ok "parses: $(basename "$p")" || bad "parses: $(basename "$p")"
 done
 # bash-4-only constructs that silently break on 3.2
@@ -571,6 +571,42 @@ OUT="$(python3 "$VA" "$TMP/aes_axes.json" "$TMP/aes_intel.json" 2>&1)"; echo "$O
 # color axis sourced from a non-palette system → blocks (palette comes from direction.name)
 _axes "{**{ax:{'source':'linear-app',$R} for ax in ['typography','shape','elevation','spacing','motion']}, 'color':{'source':'openai',$R}}" "linear-app"
 OUT="$(python3 "$VA" "$TMP/aes_axes.json" "$TMP/aes_intel.json" 2>&1)"; echo "$OUT" | grep -q "axes.color.source" && ok "color axis must match direction.name → blocks" || bad "color/direction mismatch not blocked"
+
+# ── T20. lint_axis_fidelity — gate 11 (non-colour axes applied) ───────────────
+echo "[T20] lint_axis_fidelity — type/shape/motion axes must reach the build"
+LAF="$SCRIPTS_DIR/lint_axis_fidelity.py"
+cat > "$TMP/axes_aes.json" <<'JSON'
+{"axes":{
+ "typography":{"resolved":{"base_line_height":1.65,"heading_weight_cap":600}},
+ "shape":{"resolved":{"pill_slots":["badge"]}},
+ "motion":{"resolved":{"easing":"cubic-bezier(0.16, 1, 0.3, 1)"}}}}
+JSON
+# globals with all axes applied → pass
+cat > "$TMP/axes_ok.css" <<'CSS'
+@theme inline { --text-base--line-height: 1.65; }
+@layer base {
+  h1, h2, h3 { font-weight: 600; }
+  [data-slot="badge"] { @apply rounded-full; }
+  :root { --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1); }
+  [data-slot="button"] { transition-timing-function: var(--ease-out-soft); }
+}
+CSS
+python3 "$LAF" "$TMP/axes_ok.css" "$TMP/axes_aes.json" >/dev/null 2>&1 && ok "all axes applied → exit 0" || bad "applied axes wrongly blocked"
+# motion easing declared but missing from globals → block
+cat > "$TMP/axes_nomotion.css" <<'CSS'
+@theme inline { --text-base--line-height: 1.65; }
+@layer base { h1 { font-weight: 600; } [data-slot="badge"] { @apply rounded-full; } }
+CSS
+OUT="$(python3 "$LAF" "$TMP/axes_nomotion.css" "$TMP/axes_aes.json" 2>&1)"; echo "$OUT" | grep -q "easing" && ok "motion easing declared-not-applied → blocked" || bad "missing easing not blocked"
+# pill slot declared but no rounded-full rule → block
+cat > "$TMP/axes_nopill.css" <<'CSS'
+@theme inline { --text-base--line-height: 1.65; }
+@layer base { h1 { font-weight: 600; } :root { --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1); } [data-slot="button"] { transition-timing-function: var(--ease-out-soft); } }
+CSS
+OUT="$(python3 "$LAF" "$TMP/axes_nopill.css" "$TMP/axes_aes.json" 2>&1)"; echo "$OUT" | grep -q "pill_slots" && ok "pill shape declared-not-applied → blocked" || bad "missing pill not blocked"
+# no axes block → graceful skip (exit 0)
+echo '{"meta":{}}' > "$TMP/axes_none.json"
+python3 "$LAF" "$TMP/axes_ok.css" "$TMP/axes_none.json" >/dev/null 2>&1 && ok "no axes block → graceful skip" || bad "no-axes should skip, not block"
 
 # ── result ────────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────────────"

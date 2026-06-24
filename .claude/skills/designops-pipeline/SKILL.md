@@ -18,7 +18,7 @@ description: >
   screen must survive, via UI Stack × CORRECT, severity driven by the Step 2.5 directives.
   Step 4 builds a POC prototype from a ready-made component library + mock data, Step 4.6 runs a
   scored critique (6 weighted dimensions + Nielsen + anti-slop + a separate judge pass), Step 4.7 is a runnable audit gate
-  (audit_prototype.py — 10 gates: tokens + WCAG contrast in light/dark + no-emoji + component contracts + no remote-font @import + theme fidelity + directive fidelity + screen coverage + edge-case coverage + font fidelity) before handoff.
+  (audit_prototype.py — 11 gates: tokens + WCAG contrast in light/dark + no-emoji + component contracts + no remote-font @import + theme fidelity + directive fidelity + screen coverage + edge-case coverage + font fidelity + axis fidelity) before handoff.
   UX layers feed the pipeline: Step 2.3 (User Research → research.json: personas/JTBD/pains) and
   Step 2.4 (Competitive Analysis → competitive.json) supply evidence to Step 2.5; Step 4.8
   (Usability Test → usability.json: heuristic + automated + simulated persona walkthrough) runs on
@@ -86,7 +86,7 @@ TOR (PDF / DOCX / Notion / GDocs)
               └────────────────────────────────┘
                                │
                                ▼  Step 4.6  critique (4-layer + judge) → fix
-                               ▼  Step 4.7  audit gate (10 gates: token + WCAG + … + edge + font fidelity)
+                               ▼  Step 4.7  audit gate (11 gates: token + WCAG + … + font + axis fidelity)
                                │            🔴 critical = block handoff
                                ▼  Step 5 (separate pipeline)
               ┌────────────────────────────────┐
@@ -964,6 +964,8 @@ Audit the prototype across 3 categories (see the severity matrix in the referenc
 > …**edge-case coverage** (gate 9, `scripts/lint_edge_coverage.py`) closes the **edge-case spine** — the back end of Step 3.7. It reads `edge-cases.json`: every **Must** edge case must have detectable handling in the screen it maps to — an empty/error/loading/partial state, inline validation (`FieldError`/`aria-invalid`/schema), or a destructive confirm (`AlertDialog`/type-to-confirm), chosen by the edge's `ui_state`/`category`. It resolves each `maps_to_screen` to a route via `screen-inventory.json` (or scans the whole app as a coarse fallback), auto-discovers `edge-cases.json` beside the prototype (or `--edges`), and skips cleanly when absent. This is the build-side end of the `screen → edge case` traceability that `validate_edgecases.py` enforces upstream (every edge traces to a real screen + the directive floors), so a screen can't ship with only its happy path.
 
 > …**font fidelity** (gate 10, `scripts/lint_font_fidelity.py`) closes the typography half of the Step 2.6 bridge. Gate 6 verifies the committed *colours* are applied; gate 10 verifies the committed **`font_sans`** is too. It reads `brand.config.json` (or `aesthetic.json`), extracts the primary family (e.g. `Inter` from `"Inter", "Noto Sans Thai", …`), and FAILS when neither `app/layout.*` nor `globals.css` references it — i.e. the scaffold kept its default loader (Geist) and the font directive silently no-opped. (Gate 5 only forbids a remote `@import`; gate 6 only checks colours — nothing else caught this, and for a Thai TOR committing `Noto Sans Thai` it is a real regression.) Load the committed family via `next/font` and wire `--font-sans`. Auto-discovers the theme beside the prototype (or `--theme`); skips cleanly when no `font_sans` is committed.
+
+> …**axis fidelity** (gate 11, `scripts/lint_axis_fidelity.py`) extends the same idea to the **non-colour axes**. Step 2.6's `axes` block resolves a system on six facets (color · typography · shape · elevation · spacing · motion); gates 6/10 cover colour + font, gate 11 covers the rest's machine-readable `resolved` metrics. It reads `aesthetic.json` and FAILS when a declared metric isn't in the built `globals.css`: `typography.resolved.base_line_height` / `heading_weight_cap` (the type ramp re-pointed via `@theme --text-*` and a heading weight rule), `shape.resolved.pill_slots[]` (a brand-scoped `[data-slot=…]{ @apply rounded-full }`), `motion.resolved.easing` (defined as a CSS var AND applied to a non-card slot). This catches the "declared but not applied" no-op — the same class as the font bug — for type/shape/motion. **The two bridge techniques it expects are no-hardcode-safe:** re-point Tailwind's `@theme` (sizes in `rem`, line-heights unitless, tracking in `em`) so existing `text-*` utilities inherit the brand without editing JSX, and brand-scoped `[data-slot=*]` rules (`@apply` utility classes + CSS vars, never raw `px`/`ms`) so component specs land without editing `components/ui`. Auto-discovers `aesthetic.json` beside the prototype (or `--aesthetic`); skips cleanly when there's no `axes` block.
 
 > **a11y target** comes from `intelligence.json` → `design_directives.a11y_target` (Step 2.5 already enforced the floor + public-sector ⇒ AAA invariant). Pass it straight to `--a11y` (the script maps `AA_plus`→AAA).
 
