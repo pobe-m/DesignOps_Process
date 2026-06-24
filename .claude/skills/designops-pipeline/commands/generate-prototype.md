@@ -409,8 +409,8 @@ Run through every generated file and verify:
 > Exit 1 = BLOCKED. It recomputes WCAG contrast from `globals.css` (oklch→sRGB, light + dark) and
 > lints the screens for hardcoded values — A + B are machine-checked. Audits the generated surface
 > only (`components/ui` + any `docs/` dir auto-excluded; no `--scan` needed, `--include-vendored` to
-> audit all). It also runs gates 5-9 (font, theme fidelity, directive fidelity, screen coverage,
-> **edge-case coverage**), auto-discovering `brand.config.json` / `intelligence.json` /
+> audit all). It also runs gates 5-10 (font loading, theme fidelity, directive fidelity, screen
+> coverage, **edge-case coverage**, **font fidelity**), auto-discovering `brand.config.json` / `intelligence.json` /
 > `screen-inventory.json` / `edge-cases.json` beside the prototype — pass `--edges` / `--screens` if
 > they live elsewhere. Then read `../references/audit-checklist.md` for the qualitative C items and append them to the report.
 
@@ -421,6 +421,7 @@ Run through every generated file and verify:
 | C. Component Quality | naming · complete states · no avoidable `any` | 🟡 note (agent) |
 | D. Component contracts | `audit_prototype.py`→`lint_component_contracts.py`: icon-button name · `DialogTitle` · `Input`↔`FieldLabel` (`component-contracts.md`) | 🔴 block (script) |
 | E. Edge-case coverage | `audit_prototype.py`→`lint_edge_coverage.py` (gate 9): every **Must** edge in `edge-cases.json` is handled in its screen (empty/error/loading/partial state · inline validation · destructive confirm) | 🔴 block (script) |
+| F. Font fidelity | `audit_prototype.py`→`lint_font_fidelity.py` (gate 10): the committed `brand.config.font_sans` is actually applied in `app/layout.*`/`globals.css` (not left at the scaffold default) | 🔴 block (script) |
 
 - a11y target from `aesthetic.json`/`intelligence.json` `design_directives.a11y_target` (AAA for public-sector)
 - The script writes `output/prototype/docs/audit-report.md`

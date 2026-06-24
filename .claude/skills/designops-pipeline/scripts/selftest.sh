@@ -31,7 +31,7 @@ for s in "$RUN" "$SCRIPTS_DIR/setup-prototype.sh" "$0"; do
   [ -f "$s" ] || continue
   /bin/bash -n "$s" 2>/dev/null && ok "syntax: $(basename "$s")" || bad "syntax: $(basename "$s")"
 done
-for p in "$VALIDATE" "$VALIDATE_INTEL" "$SCRIPTS_DIR/validate_flows.py" "$SCRIPTS_DIR/validate_screens.py" "$SCRIPTS_DIR/validate_aesthetic.py" "$SCRIPTS_DIR/validate_research.py" "$SCRIPTS_DIR/validate_competitive.py" "$SCRIPTS_DIR/validate_usability.py" "$SCRIPTS_DIR/validate_critique.py" "$SCRIPTS_DIR/validate_edgecases.py" "$SCRIPTS_DIR/audit_prototype.py" "$SCRIPTS_DIR/lint_hardcodes.py" "$SCRIPTS_DIR/lint_edge_coverage.py" "$SCRIPTS_DIR/../references/ux-writing/scripts/check_no_emoji.py"; do
+for p in "$VALIDATE" "$VALIDATE_INTEL" "$SCRIPTS_DIR/validate_flows.py" "$SCRIPTS_DIR/validate_screens.py" "$SCRIPTS_DIR/validate_aesthetic.py" "$SCRIPTS_DIR/validate_research.py" "$SCRIPTS_DIR/validate_competitive.py" "$SCRIPTS_DIR/validate_usability.py" "$SCRIPTS_DIR/validate_critique.py" "$SCRIPTS_DIR/validate_edgecases.py" "$SCRIPTS_DIR/audit_prototype.py" "$SCRIPTS_DIR/lint_hardcodes.py" "$SCRIPTS_DIR/lint_edge_coverage.py" "$SCRIPTS_DIR/lint_font_fidelity.py" "$SCRIPTS_DIR/../references/ux-writing/scripts/check_no_emoji.py"; do
   python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$p" 2>/dev/null && ok "parses: $(basename "$p")" || bad "parses: $(basename "$p")"
 done
 # bash-4-only constructs that silently break on 3.2
@@ -295,6 +295,9 @@ faithful_css() { cat > "$PF/app/globals.css" <<'CSS'
 CSS
 }
 faithful_css
+# the fixture's brand.config commits font_sans:"Inter" → apply it so gate 10 (font fidelity) is satisfied,
+# keeping this case focused on gate 6 (theme colour fidelity).
+printf 'import { Inter } from "next/font/google";\nconst f = Inter({ variable: "--font-sans" });\n' > "$PF/app/layout.tsx"
 python3 "$SCRIPTS_DIR/audit_prototype.py" "$PF" --a11y AA >/dev/null 2>&1 && ok "committed theme applied → fidelity PASS (exit 0)" || bad "faithful theme should pass gate 6"
 # regress --primary to a neutral gray (still high contrast) — only fidelity should catch it
 faithful_css; python3 -c "import re,io;p='$PF/app/globals.css';s=open(p).read().replace('--primary: oklch(0.45 0.2 264)','--primary: oklch(0.3 0 0)').replace('--accent: oklch(0.9 0.05 264)','--accent: oklch(0.92 0 0)');open(p,'w').write(s)"
@@ -521,6 +524,24 @@ echo '{"edge_cases":[{"id":"E1","ui_state":"partial","category":"data","severity
 python3 "$LEC" "$PROTO9" "$TMP/c9_x.json" "$TMP/c9_scr.json" >/dev/null 2>&1 && ok "should/could edge → never blocks" || bad "non-must edge should not block"
 # audit_prototype wires gate 9 (edges= in summary)
 echo "$(python3 "$SCRIPTS_DIR/audit_prototype.py" "$PROTO9" --edges "$TMP/c9_edges.json" --screens "$TMP/c9_scr.json" 2>&1)" | grep -q "edges=" && ok "audit_prototype reports gate 9 (edges=)" || bad "gate 9 not wired into audit_prototype"
+
+# ── T18. lint_font_fidelity — gate 10 (committed font actually applied) ───────
+echo "[T18] lint_font_fidelity — committed font_sans must reach the build"
+LFF="$SCRIPTS_DIR/lint_font_fidelity.py"
+PROTO10="$TMP/proto10"; mkdir -p "$PROTO10/app"
+echo '{"project_name":"X","font_sans":"\"Inter\", \"Noto Sans Thai\", sans-serif","radius":"0.5rem"}' > "$TMP/bc10.json"
+# build still on the default font → block
+printf 'import { Geist } from "next/font/google";\nconst f = Geist({ variable: "--font-sans" });\n' > "$PROTO10/app/layout.tsx"
+printf ':root { --font-sans: var(--font-sans); }\n' > "$PROTO10/app/globals.css"
+python3 "$LFF" "$PROTO10" "$TMP/bc10.json" >/dev/null 2>&1 && bad "font no-op (Geist) not blocked" || ok "committed Inter absent from build → blocked (gate 10)"
+# build loads the committed family → pass
+printf 'import { Inter, Noto_Sans_Thai } from "next/font/google";\nconst f = Inter({ variable: "--font-sans" });\n' > "$PROTO10/app/layout.tsx"
+python3 "$LFF" "$PROTO10" "$TMP/bc10.json" >/dev/null 2>&1 && ok "committed Inter applied in layout → exit 0" || bad "applied font wrongly blocked"
+# no font_sans committed → skip cleanly (exit 0)
+echo '{"project_name":"X","radius":"0.5rem"}' > "$TMP/bc10b.json"
+python3 "$LFF" "$PROTO10" "$TMP/bc10b.json" >/dev/null 2>&1 && ok "no font_sans committed → graceful skip" || bad "no-font theme should skip, not block"
+# audit wires gate 10 (fontfid= in summary)
+echo "$(python3 "$SCRIPTS_DIR/audit_prototype.py" "$PROTO10" --theme "$TMP/bc10.json" 2>&1)" | grep -q "fontfid=" && ok "audit_prototype reports gate 10 (fontfid=)" || bad "gate 10 not wired into audit_prototype"
 
 # ── result ────────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────────────"

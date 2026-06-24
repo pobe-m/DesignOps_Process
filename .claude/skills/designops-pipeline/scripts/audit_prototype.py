@@ -2,7 +2,7 @@
 """
 audit_prototype.py — the Step 4.7 audit GATE, as a real runnable check (not agent judgment).
 
-Nine objective, deterministic gates over the BUILT prototype:
+Ten objective, deterministic gates over the BUILT prototype:
   1. Token compliance — runs lint_hardcodes.py over the generated screens; any raw hex / px /
      ms / raw Tailwind palette utility (bg-gray-500 …) that isn't a token = a violation.
   2. WCAG contrast — parses the prototype's globals.css :root + .dark token blocks, converts
@@ -25,7 +25,10 @@ Nine objective, deterministic gates over the BUILT prototype:
   9. Edge-case coverage — runs lint_edge_coverage.py: every Must edge case in edge-cases.json
      (Step 3.7) is actually handled in the screen it maps to (empty/error/loading/partial state,
      inline validation, or a destructive confirm). The back end of the edge-case spine.
-Gates 3-9 skip cleanly (—) if their checker / source artifact is missing.
+ 10. Font fidelity — runs lint_font_fidelity.py: the font_sans Step 2.6 committed in
+     brand.config.json must actually be applied in app/layout.* / globals.css (not left at the
+     scaffold default). Catches the silent font no-op that gate 5/6 don't.
+Gates 3-10 skip cleanly (—) if their checker / source artifact is missing.
 
 By default it audits the GENERATED surface only — `components/ui` (vendored shadcn primitives),
 any `docs/` dir (DS demos + these reports), and node_modules/.next/out are auto-excluded, so you
@@ -62,6 +65,9 @@ _FONT_CHECK = HERE / "lint_font_imports.py"
 
 # theme-fidelity checker (did the committed Step 2.6 identity theme actually get applied?)
 _FIDELITY_CHECK = HERE / "lint_theme_fidelity.py"
+
+# font-fidelity checker (did the committed Step 2.6 font_sans actually get applied?)
+_FONT_FIDELITY_CHECK = HERE / "lint_font_fidelity.py"
 
 # directive-fidelity (gate 7) + screen-coverage (gate 8) + edge-coverage (gate 9) —
 # did the build honor the upstream intent?
@@ -267,6 +273,15 @@ def screen_gate(proto, screens_path=None):
     return proc.returncode == 0, (proc.stdout.strip() or proc.stderr.strip())
 
 
+def font_fidelity_gate(proto, theme_path=None):
+    theme = _find_theme(proto, theme_path)
+    if not theme or not _FONT_FIDELITY_CHECK.is_file():
+        return None, "skipped (no brand.config.json/aesthetic.json beside prototype, or checker missing)"
+    proc = subprocess.run([sys.executable, str(_FONT_FIDELITY_CHECK), str(proto), str(theme)],
+                          capture_output=True, text=True)
+    return proc.returncode == 0, (proc.stdout.strip() or proc.stderr.strip())
+
+
 def edge_gate(proto, edges_path=None, screens_path=None):
     ec = _find_artifact(proto, ("edge-cases.json",), edges_path)
     if not ec or not _EDGE_CHECK.is_file():
@@ -374,6 +389,11 @@ def main(argv):
     out += ["## 9. Edge-case coverage (every Must edge case handled in its screen)",
             "```", edge_out or "(skipped)", "```", ""]
 
+    # gate 10 (font fidelity: committed Step 2.6 font_sans actually applied)
+    font_fid_ok, font_fid_out = font_fidelity_gate(proto, theme)
+    out += ["## 10. Font fidelity (committed Step 2.6 font applied, not the scaffold default)",
+            "```", font_fid_out or "(skipped)", "```", ""]
+
     # gate 2
     css = proto / "app" / "globals.css"
     if css.is_file():
@@ -389,7 +409,8 @@ def main(argv):
     blocked = not (lint_ok and contrast_ok and emoji_ok is not False
                    and contract_ok is not False and font_ok is not False
                    and fidelity_ok is not False and directive_ok is not False
-                   and screen_ok is not False and edge_ok is not False)
+                   and screen_ok is not False and edge_ok is not False
+                   and font_fid_ok is not False)
     verdict = "🔴 BLOCKED" if blocked else "🟢 PASS"
     out += ["## Verdict", f"- Token compliance: {'🟢' if lint_ok else '🔴'}",
             f"- WCAG {a11y} contrast: {'🟢' if contrast_ok else '🔴'}",
@@ -400,6 +421,7 @@ def main(argv):
             f"- Directive fidelity (safeguards/guidance): {'🟢' if directive_ok else ('—' if directive_ok is None else '🔴')}",
             f"- Screen coverage (Must screens built): {'🟢' if screen_ok else ('—' if screen_ok is None else '🔴')}",
             f"- Edge-case coverage (Must edges handled): {'🟢' if edge_ok else ('—' if edge_ok is None else '🔴')}",
+            f"- Font fidelity (committed font applied): {'🟢' if font_fid_ok else ('—' if font_fid_ok is None else '🔴')}",
             "", f"**{verdict}**"]
     if cfails:
         out += ["", "### Contrast failures", *[f"- {f}" for f in cfails]]
@@ -418,7 +440,8 @@ def main(argv):
           f"fidelity={'PASS' if fidelity_ok else ('—' if fidelity_ok is None else 'FAIL')} · "
           f"directive={'PASS' if directive_ok else ('—' if directive_ok is None else 'FAIL')} · "
           f"screens={'PASS' if screen_ok else ('—' if screen_ok is None else 'FAIL')} · "
-          f"edges={'PASS' if edge_ok else ('—' if edge_ok is None else 'FAIL')}")
+          f"edges={'PASS' if edge_ok else ('—' if edge_ok is None else 'FAIL')} · "
+          f"fontfid={'PASS' if font_fid_ok else ('—' if font_fid_ok is None else 'FAIL')}")
     if report:
         print(f"  → {report}")
     for f in cfails:
