@@ -56,6 +56,66 @@ that's the first finding.
 
 ---
 
+## Structured output + judge (the gate side of the critique)
+
+The prose critique above is for the human reader. The pipeline ALSO emits a machine-checkable
+`critique.json` next to it, gated by `scripts/validate_critique.py`. Two ideas, borrowed from the
+browser-use `qa` skill, make the critique trustworthy instead of self-congratulatory:
+
+**1. A separate judge pass (don't let the builder grade its own homework).** The same agent built
+the prototype, so its self-score is biased upward. After scoring, run a **second, adversarial pass
+in the judge's voice** — its only job is a pass/fail call: *would a real, skeptical user of this
+product accept this screen for the job it's for?* It looks for the failure the optimism glossed over
+(a dead primary action, an unreachable state, a blank region that "looks done"). It writes a single
+`judge_verdict` (true|false) + a `judge_reason`.
+
+**2. The judge caps the score.** `judge_verdict: false` forces `overall_score ≤ 2.0` — a beautiful
+screen whose core task is broken is a 1–2, not a 7. The self-score cannot override the judge; the
+gate (`validate_critique.py`) blocks if it tries. (A clean build with `judge_verdict: true` keeps
+its computed score.)
+
+### `critique.json` schema
+
+```json
+{
+  "judge_verdict": true,
+  "judge_reason": "Booking happy-path completes; primary action reachable on every screen.",
+  "overall_score": 7.4,
+  "screens": [
+    {
+      "name": "Booking",
+      "score": 7.5,
+      "dimensions": {
+        "hierarchy": 8, "consistency": 8, "a11y": 7,
+        "usability": 7, "responsiveness": 7, "performance": 7
+      }
+    }
+  ],
+  "findings": [
+    { "severity": "major", "category": "a11y", "location": "Booking / submit",
+      "finding": "...", "recommendation": "...", "heuristic": "H5", "resolved": true }
+  ],
+  "what_worked": ["Clear single primary action per screen", "Consistent token use"]
+}
+```
+
+- `judge_verdict` (bool, **required**) + `judge_reason` (**required when false**).
+- `overall_score` 1–10 = the weighted formula above; **capped at 2.0 when `judge_verdict` is false**.
+- `screens[]` — each with `name`, a 1–10 `score`, and all six `dimensions` (1–10).
+- `findings[]` — `severity` ∈ {critical, major, minor, enhancement}; set `resolved:true` once auto-fixed.
+- `what_worked[]` — name what works (a critique that only lists faults isn't trusted).
+
+The gate **blocks** on: missing/invalid `judge_verdict`, a `false` verdict with score > 2.0, an
+out-of-range dimension/overall score, an unknown severity. It only **warns** on: `overall_score`
+below the 6.0 ship threshold (the fix loop, not the gate, raises that), an empty `what_worked`, or
+unresolved Criticals alongside a passing verdict. Run it after writing the file:
+
+```bash
+python3 .claude/skills/designops-pipeline/scripts/validate_critique.py {OUTPUT_DIR}/prototype/docs/critique.json
+```
+
+---
+
 ## Critique Principles
 
 1. **Always state the context first** — critiquing a dashboard ≠ a landing page ≠ a mobile app

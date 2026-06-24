@@ -8,8 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "figma:pull": "node scripts/figma-pull.mjs",
-    "docs:offline": "bash scripts/open-docs.command"
+    "figma:pull": "node scripts/figma-pull.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

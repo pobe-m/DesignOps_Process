@@ -63,22 +63,42 @@ If not found → continue with neutral theme defaults, log:
 [generate-prototype] ℹ brand.config.json not found — using neutral theme defaults
 ```
 
-**`brand.config.json` schema:**
+**`brand.config.json` schema** (full-theme form — what Step 2.6 now emits):
 ```json
 {
   "project_name": "My App",
-  "primary":   "oklch(0.35 0.18 264)",
-  "secondary": "oklch(0.96 0.01 264)",
-  "accent":    "oklch(0.96 0.04 264)",
-  "destructive": "oklch(0.577 0.245 27.325)",
   "radius":    "0.5rem",
-  "font_sans": "\"Noto Sans Thai\", sans-serif",
-  "font_mono": "\"JetBrains Mono\", monospace",
-  "dark_mode": true
+  "font_sans": "\"Inter\", sans-serif",
+  "font_mono": "\"Berkeley Mono\", monospace",
+  "dark_mode": true,
+  "signature": { "border_style": "translucent", "elevation": "layered",
+                 "type_weight": "medium", "tracking": "tight" },
+  "colors": {
+    "light": {
+      "background": "#ffffff", "foreground": "#18181b",
+      "card": "#ffffff", "card-foreground": "#18181b",
+      "popover": "#ffffff", "popover-foreground": "#18181b",
+      "primary": "#4338ca", "primary-foreground": "#ffffff",
+      "secondary": "#f4f4f5", "secondary-foreground": "#18181b",
+      "muted": "#f4f4f5", "muted-foreground": "#52525b",
+      "accent": "#eef2ff", "accent-foreground": "#3730a3",
+      "destructive": "#dc2626", "border": "#e4e4e7", "input": "#e4e4e7", "ring": "#4338ca"
+    },
+    "dark": { "background": "#08090a", "foreground": "#f7f8f8", "...": "(same 18 keys)" }
+  }
 }
 ```
 
-All fields are optional. Only override keys that are present — leave the rest at defaults.
+> **Why the full `colors` block matters.** The identity of a design system lives in its
+> *secondary* tokens — surfaces (`card`/`secondary`/`muted`), `accent`, `border`, and the whole
+> dark theme — **not** in `--primary`. The old schema carried only `primary`/`radius`/`font`, so
+> everything else stayed at the shadcn-neutral default and the result looked "plain — like the
+> brand colour slapped on a neutral skeleton". Carry the whole theme so it actually flows through.
+> The Step 4.7 **theme-fidelity gate** blocks if the prototype regresses to neutral.
+
+**Back-compat:** the legacy flat form (`primary`/`secondary`/`accent`/`destructive`/`radius`/
+`font_sans` at the top level, no `colors`) is still accepted — it just themes only those keys
+(the old narrow behaviour). Prefer the `colors` form. All fields are optional.
 
 ---
 
@@ -100,16 +120,40 @@ bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out ./output
 
 ### 1b. Apply brand overrides (if brand.config.json exists)
 
-Edit `output/prototype/app/globals.css` — change only the keys present in brand.config.json, inside the `:root` block:
+Edit `output/prototype/app/globals.css`. **Which path you take depends on the brand.config shape:**
+
+**A — full-theme form (has `colors`) — the default Step 2.6 output.** Overwrite the WHOLE token
+block so the chosen system's identity actually lands. For every key in `colors.light`, set the
+matching `--<token>` inside `:root`; for every key in `colors.dark`, set it inside `.dark`. Keep
+the DS's token names exactly (`--card`, `--secondary`, `--muted`, `--accent`, `--border`, `--ring`,
+…) and `--radius`/`--input` too. Do NOT leave card/secondary/muted/accent/border at their neutral
+defaults — that regression is exactly what the Step 4.7 fidelity gate blocks.
 
 ```css
-/* Override example — change only the keys that are present */
 :root {
-  --primary:    [brand.primary];
-  --radius:     [brand.radius];
-  /* don't remove other tokens */
+  --background: [colors.light.background];  --foreground: [colors.light.foreground];
+  --card: [colors.light.card];              --card-foreground: [colors.light.card-foreground];
+  --primary: [colors.light.primary];        --primary-foreground: [colors.light.primary-foreground];
+  --secondary: [colors.light.secondary];    --secondary-foreground: [colors.light.secondary-foreground];
+  --muted: [colors.light.muted];            --muted-foreground: [colors.light.muted-foreground];
+  --accent: [colors.light.accent];          --accent-foreground: [colors.light.accent-foreground];
+  --destructive: [colors.light.destructive];
+  --border: [colors.light.border];  --input: [colors.light.input];  --ring: [colors.light.ring];
+  --popover: [colors.light.popover];  --popover-foreground: [colors.light.popover-foreground];
+  --radius: [brand.radius];
+  /* keep sidebar-*/chart-* tokens unless brand.config overrides them */
 }
+.dark { /* same 18 tokens from colors.dark */ }
 ```
+
+**Apply `signature` at the component level** (utilities only — never raw values, so gate 1 stays
+green): `elevation:layered`→ `shadow-lg` on dialogs/popovers + `shadow-sm` on cards (`flat`→ no
+shadow, rely on `border`); `border_style:translucent`→ prefer `border` over heavy dividers;
+`type_weight`→ heading weight (`font-medium`/`font-semibold`); `tracking`→ heading tracking
+(`tracking-tight`…). Read `signature` from `brand.config.json` or `output/aesthetic.json`.
+
+**B — legacy flat form (no `colors`).** Back-compat: change only the keys present (`--primary`,
+`--radius`, …) inside `:root`, leave the rest at defaults.
 
 If `font_sans` is overridden → load the font in `app/layout.tsx`, **never** with a CSS `@import`:
 - Add the font via `next/font/google` or `next/font/local` (exposes a CSS variable, e.g. `variable: "--font-app"`), apply the variable class on `<html>`, and point `--font-sans: var(--font-app), …` in `:root`.
@@ -119,9 +163,11 @@ If `dark_mode: false` → remove the `.dark { … }` block from `globals.css` an
 
 Log:
 ```
-[generate-prototype] ✓ Brand applied
-  primary: [value] · radius: [value] · font: [value]
+[generate-prototype] ✓ Brand applied (full theme)
+  identity: [N] light + [N] dark tokens · radius: [value] · font: [value]
+  signature: elevation=[..] border=[..] type=[..] tracking=[..]
 ```
+(legacy flat form → `[generate-prototype] ✓ Brand applied (flat: primary/radius/font)`)
 
 ---
 
@@ -348,7 +394,10 @@ Run through every generated file and verify:
 
 - Fix every 🔴 **Critical** + ⚡ **Quick Win** immediately in the prototype
 - 🟡 **High** → log in the handoff doc for Dev
-- Write the full critique to `output/prototype/docs/critique.md`
+- Run a **separate judge pass** (skeptical voice, pass/fail) — a `false` verdict caps the overall score at 2.0
+- Write the prose critique to `output/prototype/docs/critique.md` **and** the structured scores +
+  judge verdict to `output/prototype/docs/critique.json`, then gate it:
+  `python3 .claude/skills/designops-pipeline/scripts/validate_critique.py output/prototype/docs/critique.json`
 
 ## Step 5.6 — Audit gate (before handoff)
 
@@ -360,7 +409,10 @@ Run through every generated file and verify:
 > Exit 1 = BLOCKED. It recomputes WCAG contrast from `globals.css` (oklch→sRGB, light + dark) and
 > lints the screens for hardcoded values — A + B are machine-checked. Audits the generated surface
 > only (`components/ui` + any `docs/` dir auto-excluded; no `--scan` needed, `--include-vendored` to
-> audit all). Then read `../references/audit-checklist.md` for the qualitative C items and append them to the report.
+> audit all). It also runs gates 5-9 (font, theme fidelity, directive fidelity, screen coverage,
+> **edge-case coverage**), auto-discovering `brand.config.json` / `intelligence.json` /
+> `screen-inventory.json` / `edge-cases.json` beside the prototype — pass `--edges` / `--screens` if
+> they live elsewhere. Then read `../references/audit-checklist.md` for the qualitative C items and append them to the report.
 
 | Category | Checks | gate |
 |----------|--------|------|
@@ -368,6 +420,7 @@ Run through every generated file and verify:
 | B. A11y / WCAG `[AA\|AAA]` | `audit_prototype.py` contrast on essential fg/bg pairs, light + dark | 🔴 block (script) |
 | C. Component Quality | naming · complete states · no avoidable `any` | 🟡 note (agent) |
 | D. Component contracts | `audit_prototype.py`→`lint_component_contracts.py`: icon-button name · `DialogTitle` · `Input`↔`FieldLabel` (`component-contracts.md`) | 🔴 block (script) |
+| E. Edge-case coverage | `audit_prototype.py`→`lint_edge_coverage.py` (gate 9): every **Must** edge in `edge-cases.json` is handled in its screen (empty/error/loading/partial state · inline validation · destructive confirm) | 🔴 block (script) |
 
 - a11y target from `aesthetic.json`/`intelligence.json` `design_directives.a11y_target` (AAA for public-sector)
 - The script writes `output/prototype/docs/audit-report.md`
@@ -428,7 +481,7 @@ Key trade-offs:
 [rows from the Gap Report in design-first-draft.md]
 
 ## Quality (critique + audit + usability)
-- Critique: `docs/critique.md` — 🟡 High items Dev should review: [list]
+- Critique: `docs/critique.md` (+ `docs/critique.json`) — judge verdict [pass/fail] · overall [N]/10 · 🟡 High items Dev should review: [list]
 - Audit: `docs/audit-report.md` — Token [🟢/🟡] · A11y [AA|AAA] [🟢/🟡] · Component [🟢/🟡]
 - Usability (simulated): `usability.json` — top issues: [top_issues w/ severity + fix_priority]. NOT a real-user test — validate with users.
 
@@ -460,11 +513,11 @@ If there's a TypeScript error → fix it before logging complete.
     ✓ [screen-name]  →  app/([group])/[path]/page.tsx
   Gaps:    [Y] GapPlaceholder components
   Types:   ✓ pass
-  Critique:[C] critical fixed · [Q] quick wins applied
+  Critique:[judge pass/fail] · overall [N]/10 · [C] critical fixed · [Q] quick wins applied
   Audit:   [PASS | BLOCKED] · WCAG [AA|AAA] · token [🟢/🟡]
 
   npm run dev → http://localhost:3000
   Handoff:    output/prototype/docs/poc-handoff.md
-  Critique:   output/prototype/docs/critique.md
+  Critique:   output/prototype/docs/critique.md (+ critique.json)
   Audit:      output/prototype/docs/audit-report.md
 ```

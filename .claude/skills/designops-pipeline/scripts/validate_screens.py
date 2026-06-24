@@ -2,11 +2,13 @@
 """
 validate_screens.py — gate for Step D (Screen Inventory).
 
-Usage: validate_screens.py <screen-inventory.json> [flows.json]
+Usage: validate_screens.py <screen-inventory.json> [flows.json] [brief.json]
 Exit 0 = valid, Exit 1 = invalid. Zero-dependency, mirrors validate_brief.py.
 
 Enforces flow→screen coverage (every flow has at least one screen) and screen→flow
-traceability, plus structural enums.
+traceability, plus structural enums. With brief.json it also enforces the contractual
+scope: every Must core_feature — and every scoring minimum_viable.must_have_feature —
+must be served by at least one screen (so intent can't vanish between TOR and build).
 """
 
 import json
@@ -16,6 +18,7 @@ REQUIRED_TOP_KEYS = ["meta", "screens"]
 PRIORITY = {"Must", "Should", "Could"}
 LAYOUT = {"card", "table", "dashboard", "form", "wizard_step", "list", "detail", "hub"}
 GAP_STATUS = {"missing", "partial"}
+STATES = {"loading", "empty", "error"}  # data-state coverage the built screen must render
 
 
 def _load(path):
@@ -28,7 +31,7 @@ def _load(path):
         return None, f"file not found: {path}"
 
 
-def validate(screens_path, flows_path=None):
+def validate(screens_path, flows_path=None, brief_path=None):
     errors, warnings = [], []
     d, err = _load(screens_path)
     if err:
@@ -39,6 +42,12 @@ def validate(screens_path, flows_path=None):
         flows, e = _load(flows_path)
         if e:
             warnings.append(e + " — skipping coverage checks")
+
+    brief = None
+    if brief_path:
+        brief, e = _load(brief_path)
+        if e:
+            warnings.append(e + " — skipping feature/scoring coverage")
 
     for k in REQUIRED_TOP_KEYS:
         if k not in d:
@@ -52,7 +61,9 @@ def validate(screens_path, flows_path=None):
         return errors, warnings
 
     flow_ids = {fl.get("id") for fl in (flows or {}).get("flows", [])} if flows else None
-    covered = set()
+    brief_feature_ids = {f.get("id") for f in (brief or {}).get("core_features", []) if f.get("id")}
+    covered = set()           # flow ids that have a screen
+    feature_covered = set()   # core_feature ids that have a screen
     sc_ids = set()
 
     for i, s in enumerate(screens):
@@ -75,6 +86,20 @@ def validate(screens_path, flows_path=None):
                 if flow_ids is not None and r not in flow_ids:
                     errors.append(f"screens[{i}].flow_refs '{r}' not in flows.json")
                 covered.add(r)
+        # feature_refs (optional) — trace the screen back to the brief's contractual scope
+        for fr in s.get("feature_refs", []) or []:
+            feature_covered.add(fr)
+            if brief_feature_ids and fr not in brief_feature_ids:
+                errors.append(f"screens[{i}].feature_refs '{fr}' not in brief.core_features")
+        # route — required on Must screens so gate 8 can deterministically find the built page
+        route = s.get("route")
+        if s.get("priority") == "Must" and not route:
+            errors.append(f"screens[{i}] ('{s.get('name','')}') is Must but has no route "
+                          "(needed for the screen-coverage gate to locate app/<route>/page.tsx)")
+        # states — the data-states the built screen must render
+        for st in s.get("states", []) or []:
+            if st not in STATES:
+                errors.append(f"screens[{i}].states '{st}' must be one of {sorted(STATES)}")
         # a screen must declare components OR explicit gaps (not be empty)
         if not s.get("components") and not s.get("gaps"):
             errors.append(f"screens[{i}] has neither components nor gaps (empty screen)")
@@ -88,14 +113,35 @@ def validate(screens_path, flows_path=None):
         if uncovered:
             errors.append(f"flows with no screen (coverage gap): {uncovered}")
 
+    # contractual-scope coverage: every Must feature + every scoring must-have → a screen.
+    # Only enforced when screens actually use feature_refs (else it's unknowable → nudge).
+    if brief is not None:
+        must_feats = [f for f in brief.get("core_features", []) if f.get("priority") == "Must"]
+        if feature_covered:
+            for f in must_feats:
+                fid = f.get("id")
+                if fid and fid not in feature_covered:
+                    errors.append(f"Must feature '{fid}' ({f.get('name','')}) has no screen "
+                                  "(screen-inventory coverage gap — contractual scope dropped)")
+            # scoring rubric: the must-have features the deliverable is graded on
+            sc = brief.get("scoring_criteria") or {}
+            mv = (sc.get("minimum_viable") or {}) if isinstance(sc, dict) else {}
+            for fid in mv.get("must_have_features", []):
+                if fid not in feature_covered:
+                    errors.append(f"scoring must_have_feature '{fid}' has no screen "
+                                  "(the deliverable is graded on it — must be built)")
+        elif must_feats:
+            warnings.append("screens declare no feature_refs — feature/scoring coverage not enforced; "
+                            "add feature_refs so every Must/scored feature is provably built")
+
     return errors, warnings
 
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: validate_screens.py <screen-inventory.json> [flows.json]", file=sys.stderr)
+        print("Usage: validate_screens.py <screen-inventory.json> [flows.json] [brief.json]", file=sys.stderr)
         sys.exit(1)
-    errors, warnings = validate(*sys.argv[1:3])
+    errors, warnings = validate(*sys.argv[1:4])
     if errors:
         print(f"[validate_screens] ✗ Invalid — {len(errors)} error(s):", file=sys.stderr)
         for e in errors:

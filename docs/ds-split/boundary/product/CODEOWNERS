@@ -1,4 +1,0 @@
-# Ownership boundary — enforced by the CI guard (point 7 + 8).
-/generated/            @org/designops-bot
-/src/                  @org/dev-team
-/brand.config.json     @org/dev-team

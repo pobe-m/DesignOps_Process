@@ -276,6 +276,10 @@ the dimensions + research/competitive evidence) and at least the central trade_o
 Fact vs interpretation: brief.json = stated facts, intelligence.json = inference.
 Never restate the brief — infer what it implies. No evidence → confidence:"low" + an open_question.
 
+Traceability: give every core_task a feature_refs:[] listing the brief.core_features ids it serves
+(user_goals may carry feature_refs too). EVERY brief feature with priority "Must" must be referenced
+by at least one task/goal — otherwise the contractual scope was dropped and the gate fails.
+
 If "$RESEARCH_JSON" exists, use feeds_intelligence as evidence: personas → user_types,
 jobs_to_be_done → user_goals, pain_points/behavioral_assumptions → error_tolerance/open_questions
 (evidence-backed research raises confidence; inferred research stays a hypothesis). If
@@ -341,19 +345,38 @@ Process (anti-slop — deciding BEFORE generating; see $AESTHETICS_DIR/taste/des
    If the TOR/brief provides reference images, screenshots, or a mockup, INFER the direction
    from them instead (palette/type/spacing/radius/layout) per $SKILL_DIR/references/image-to-code.md,
    then anchor to the closest named_system/archetype. Match the design system, never copy assets.
-3. Resolve to tokens (oklch): primary, background, foreground, radius, font_sans (+ font_mono,
-   accent if the system uses them). For EVERY contrast pair, also give fg_hex + bg_hex so the
-   gate can re-compute the ratio — never self-certify.
+3. Resolve the FULL identity token set, light AND dark — this is what makes the prototype
+   actually look like the chosen system instead of "the brand colour slapped on a neutral
+   skeleton". From the system's DESIGN.md, lift its real surfaces, text hierarchy, accent and
+   border into tokens.colors.{light,dark} for EVERY one of:
+     background, foreground, card, card-foreground, popover, popover-foreground,
+     primary, primary-foreground, secondary, secondary-foreground,
+     muted, muted-foreground, accent, accent-foreground, destructive, border, input, ring
+   The identity lives in the SECONDARY tokens (card/secondary/muted/accent/border + the dark
+   set) — do NOT leave them to default. Plus scalars tokens.radius, tokens.font_sans (+font_mono).
+   Use oklch or hex. For EVERY contrast pair give fg_hex + bg_hex so the gate re-computes the
+   ratio — never self-certify. Required pairs: foreground/background, primary-foreground/primary,
+   card-foreground/card, secondary-foreground/secondary (light values minimum).
+3b. Commit a signature object for the non-colour identity (expressed later via Tailwind utilities):
+   { border_style: solid|translucent|none, elevation: flat|soft|layered,
+     type_weight: regular|medium|semibold, tracking: tighter|tight|normal|wide }.
 4. Obey constraints: constraints.a11y_target MUST equal design_directives.a11y_target and
-   constraints.density_target MUST equal design_directives.density_target. A brand color that
+   constraints.density_target MUST equal design_directives.density_target; set
+   constraints.dark_mode (true unless the product is explicitly light-only). A colour that
    fails the WCAG floor (AA 4.5:1 / AAA 7:1 normal text) must be darkened/lightened —
    taste never overrides accessibility.
-5. Emit brand_config { project_name, primary, radius, font_sans } — a ready-to-drop
-   brand.config.json whose values EQUAL tokens.* (Step 4 / generate-prototype consumes it).
+5. Emit brand_config { project_name, radius, font_sans (+font_mono), colors:{light,dark} } — a
+   ready-to-drop brand.config.json that CARRIES THE WHOLE THEME (its colors.* must EQUAL
+   tokens.colors.*). Step 4 / generate-prototype overwrites the prototype's :root + .dark from it;
+   if it carries only primary, the look regresses to neutral and the Step 4.7 fidelity gate blocks.
 
 Shape: { meta, brief_inference{domain,audience_tone,mood_adjective,motion_depth,rationale},
-direction{type,name,category,spec_ref,why_fit}, tokens{...}, contrast_checks:[{pair,fg_hex,bg_hex,ratio,large?,ui?}],
-constraints{a11y_target,density_target}, brand_config{project_name,primary,radius,font_sans} }
+direction{type,name,category,spec_ref,why_fit},
+signature{border_style,elevation,type_weight,tracking},
+tokens{radius,font_sans,font_mono,colors:{light:{...18 tokens},dark:{...18 tokens}}},
+contrast_checks:[{pair,fg_hex,bg_hex,ratio,large?,ui?}],
+constraints{a11y_target,density_target,dark_mode},
+brand_config{project_name,radius,font_sans,font_mono,colors:{light:{...},dark:{...}}} }
 PROMPT
   _generate "$PROMPT_AES" "Step 2.6 — pick + resolve aesthetic direction" "$AESTHETIC_JSON"
 fi
@@ -518,8 +541,8 @@ font_sans), and the screen look/JSX must earn brief_inference.mood_adjective. Do
 to the neutral shadcn default when an aesthetic.json exists."
 
   cat > "$PROMPT3_FILE" << PROMPT
-Read "$FLOWS_JSON" (refined flows — Step 3), "$INTEL_JSON" (design_directives), and the
-design system inventory below, then produce TWO artifacts:
+Read "$FLOWS_JSON" (refined flows — Step 3), "$INTEL_JSON" (design_directives), "$BRIEF_JSON"
+(core_features + scoring_criteria), and the design system inventory below, then produce TWO artifacts:
   1. "$SCREENS_JSON"           — machine screen inventory (gated)
   2. "$OUT_DIR/design-first-draft.md" — the human-readable breakdown built FROM it
 $AES_HINT
@@ -532,11 +555,15 @@ Derive screens from FLOWS (each flow → its screens), driving every decision fr
 - mandatory_flows  → each injected flow gets its screen(s) (e.g. consent, privacy_notice)
 - trust_emphasis   → evidence-on-demand / transparency affordances
 Coverage rule: EVERY flow in flows.json must have at least one screen; every screen.flow_refs must resolve.
+Traceability: give each screen a feature_refs:[] listing the brief.core_features ids it delivers. EVERY Must
+feature — and EVERY scoring_criteria.minimum_viable.must_have_features id — must be covered by ≥1 screen
+(the deliverable is graded on those). For each screen also give a route (url path, e.g. "dashboard" or
+"booking/new"; Must screens REQUIRE one) and states:[] ⊆ {loading,empty,error} it must render.
 If meta.overall_confidence=low (constrain_downstream), produce wireframe-level screens + flag a human gate.
 
-screen-inventory.json shape: { meta, screens:[{id,name,flow_refs:[],user_type_ref,priority:Must|Should|Could,
-purpose, layout_primitive, components:[from the DS inventory], gaps:[{name,status:missing|partial,recommendation}],
-directive_drivers:[]}] }
+screen-inventory.json shape: { meta:{must_have_features:[]}, screens:[{id,name,route,flow_refs:[],feature_refs:[],
+states:[loading|empty|error],user_type_ref,priority:Must|Should|Could, purpose, layout_primitive,
+components:[from the DS inventory], gaps:[{name,status:missing|partial,recommendation}], directive_drivers:[]}] }
 
 design system path: $DS_PATH
 design system inventory:
@@ -557,10 +584,44 @@ PROMPT
 
   if [[ -f "$SCREENS_JSON" ]]; then
     step "Validating screen-inventory.json"
-    python3 "$SKILL_DIR/scripts/validate_screens.py" "$SCREENS_JSON" "$FLOWS_JSON" || {
+    python3 "$SKILL_DIR/scripts/validate_screens.py" "$SCREENS_JSON" "$FLOWS_JSON" "$BRIEF_JSON" || {
       err "screen-inventory.json validation failed — fix it first, or re-run Step 3.5"
     }
     log "✓ screen-inventory.json valid"
+
+    # ── step 3.7 (Edge-Case Analysis): screens + flows + intelligence → edge-cases.json ──
+    EDGES_JSON="$OUT_DIR/edge-cases.json"
+    PROMPT37_FILE="$OUT_DIR/.prompt_step37.txt"
+    cat > "$PROMPT37_FILE" << PROMPT
+Read "$SCREENS_JSON" (screens + declared states), "$FLOWS_JSON" (the happy paths), and "$INTEL_JSON"
+(design_directives: error_tolerance, decision_criticality, data_density, guidance_level, safeguard_level),
+then produce "$EDGES_JSON" — the edge cases every Must screen must survive. Follow the taxonomy in
+$SKILL_DIR/references/edge-cases-layer.md (UI Stack × CORRECT) and its generation prompt:
+- Walk every Must screen through the UI Stack (Empty / Error / Partial / Loading; Ideal is the happy
+  path already designed) and its data through CORRECT (Conformance / Ordering / Range / Reference /
+  Existence / Cardinality / Time). Write an edge case for each that really applies.
+- Set severity from intelligence.json, NOT taste: low/zero error_tolerance → error + input-validation
+  edges are must; high/safety_critical decision_criticality → destructive confirms (and undo) are must;
+  data_density band ≥4 → a partial/overflow edge is must; guidance_level=guided → an empty edge is must.
+  Snapshot those into meta.driven_by.
+- Trace everything: each edge maps_to_screen (a real screen-inventory id) and, when flow-driven,
+  maps_to_flow (a real flows id). Every Must screen that declares an empty/error state must have ≥1
+  edge explaining its trigger + handling. Keep expected_handling concrete.
+
+edge-cases.json shape: { meta:{driven_by:{error_tolerance,decision_criticality,data_density_band,
+guidance_level,safeguard_level}}, edge_cases:[{id, ui_state:ideal|empty|error|partial|loading,
+correct_dim:conformance|ordering|range|reference|existence|cardinality|time, category, trigger,
+expected_handling, severity:must|should|could, maps_to_screen, maps_to_flow}] }
+PROMPT
+    _generate "$PROMPT37_FILE" "Step 3.7 — Edge-Case Analysis (screens + intelligence → edge-cases)" "$EDGES_JSON"
+
+    if [[ -f "$EDGES_JSON" ]]; then
+      step "Validating edge-cases.json"
+      python3 "$SKILL_DIR/scripts/validate_edgecases.py" "$EDGES_JSON" "$SCREENS_JSON" "$FLOWS_JSON" "$INTEL_JSON" || {
+        err "edge-cases.json validation failed — fix it first, or re-run Step 3.7"
+      }
+      log "✓ edge-cases.json valid"
+    fi
   fi
 
 else

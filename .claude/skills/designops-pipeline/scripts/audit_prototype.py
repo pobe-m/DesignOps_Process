@@ -2,7 +2,7 @@
 """
 audit_prototype.py — the Step 4.7 audit GATE, as a real runnable check (not agent judgment).
 
-Five objective, deterministic gates over the BUILT prototype:
+Nine objective, deterministic gates over the BUILT prototype:
   1. Token compliance — runs lint_hardcodes.py over the generated screens; any raw hex / px /
      ms / raw Tailwind palette utility (bg-gray-500 …) that isn't a token = a violation.
   2. WCAG contrast — parses the prototype's globals.css :root + .dark token blocks, converts
@@ -13,7 +13,19 @@ Five objective, deterministic gates over the BUILT prototype:
      usage contracts (icon-button accessible name, DialogTitle present, Input↔FieldLabel).
   5. Font loading — runs lint_font_imports.py: no remote-font @import in CSS (a Turbopack dev
      500 trap; load fonts with next/font instead).
-Gates 3, 4 and 5 skip cleanly (—) if their checker script is missing.
+  6. Theme fidelity — runs lint_theme_fidelity.py: the identity theme Step 2.6 committed
+     (brand.config.json / aesthetic.json) must actually be applied in globals.css. Catches the
+     "brand colour slapped on a neutral skeleton" regression where card/secondary/muted/border
+     silently stay at the shadcn-neutral default.
+  7. Directive fidelity — runs lint_directive_fidelity.py: the build must honor design_directives
+     (Step 2.5) — destructive actions guarded when safeguard_level is on, an empty-state when
+     guidance_level is guided (density/nav are advisory). Reads intelligence.json.
+  8. Screen coverage — runs lint_screen_coverage.py: every Must screen in screen-inventory.json
+     (Step 3.5) was actually built as an app route, rendering its declared loading/empty/error states.
+  9. Edge-case coverage — runs lint_edge_coverage.py: every Must edge case in edge-cases.json
+     (Step 3.7) is actually handled in the screen it maps to (empty/error/loading/partial state,
+     inline validation, or a destructive confirm). The back end of the edge-case spine.
+Gates 3-9 skip cleanly (—) if their checker / source artifact is missing.
 
 By default it audits the GENERATED surface only — `components/ui` (vendored shadcn primitives),
 any `docs/` dir (DS demos + these reports), and node_modules/.next/out are auto-excluded, so you
@@ -22,7 +34,9 @@ to audit everything.
 
 Usage:
   python3 audit_prototype.py <prototype_dir> [--a11y AA|AAA] [--scan app,components,lib]
-                             [--include-vendored] [--report path.md]
+                             [--include-vendored] [--report path.md] [--theme brand.config.json]
+                             [--intel intelligence.json] [--screens screen-inventory.json]
+                             [--edges edge-cases.json]
 Exit 0 = PASS, 1 = BLOCKED. Zero-dependency (imports vendored contrast.py + lint_hardcodes.py).
 """
 
@@ -45,6 +59,15 @@ _CONTRACT_CHECK = HERE / "lint_component_contracts.py"
 
 # remote-font @import checker (Turbopack dev 500 trap)
 _FONT_CHECK = HERE / "lint_font_imports.py"
+
+# theme-fidelity checker (did the committed Step 2.6 identity theme actually get applied?)
+_FIDELITY_CHECK = HERE / "lint_theme_fidelity.py"
+
+# directive-fidelity (gate 7) + screen-coverage (gate 8) + edge-coverage (gate 9) —
+# did the build honor the upstream intent?
+_DIRECTIVE_CHECK = HERE / "lint_directive_fidelity.py"
+_SCREEN_CHECK = HERE / "lint_screen_coverage.py"
+_EDGE_CHECK = HERE / "lint_edge_coverage.py"
 
 # Required pairs FAIL the gate; advisory pairs are reported only. shadcn/ui token names.
 REQUIRED_PAIRS = [
@@ -187,6 +210,75 @@ def font_gate(proto, scan_dirs, include_vendored):
     return proc.returncode == 0, proc.stdout.strip()
 
 
+# ── gate 6: theme fidelity — committed Step 2.6 theme must be applied in globals.css ──
+def _find_theme(proto, explicit=None):
+    """The committed theme json. Explicit --theme wins; else the canonical brand.config.json
+    written by Step 2.6 right beside the prototype (output/brand.config.json → proto.parent).
+    Deliberately narrow (brand.config.json only, no cwd walk) so an unrelated theme file in a
+    sibling/temp dir can't bind to the wrong prototype."""
+    if explicit:
+        p = Path(explicit)
+        return p if p.is_file() else None
+    for base in (proto.parent, proto):
+        c = base / "brand.config.json"
+        if c.is_file():
+            return c
+    return None
+
+
+def fidelity_gate(proto, theme_path=None):
+    css = proto / "app" / "globals.css"
+    theme = _find_theme(proto, theme_path)
+    if not theme or not css.is_file() or not _FIDELITY_CHECK.is_file():
+        return None, "skipped (no brand.config.json beside prototype, or checker missing)"
+    proc = subprocess.run([sys.executable, str(_FIDELITY_CHECK), str(css), str(theme)],
+                          capture_output=True, text=True)
+    return proc.returncode == 0, (proc.stdout.strip() or proc.stderr.strip())
+
+
+# ── gates 7 + 8: did the build honor the upstream intent? (auto-discover the artifact) ──
+def _find_artifact(proto, names, explicit=None):
+    if explicit:
+        p = Path(explicit)
+        return p if p.is_file() else None
+    for base in (proto.parent, proto):
+        for name in names:
+            c = base / name
+            if c.is_file():
+                return c
+    return None
+
+
+def directive_gate(proto, intel_path=None):
+    intel = _find_artifact(proto, ("intelligence.json",), intel_path)
+    if not intel or not _DIRECTIVE_CHECK.is_file():
+        return None, "skipped (no intelligence.json beside prototype, or checker missing)"
+    proc = subprocess.run([sys.executable, str(_DIRECTIVE_CHECK), str(proto), str(intel)],
+                          capture_output=True, text=True)
+    return proc.returncode == 0, (proc.stdout.strip() or proc.stderr.strip())
+
+
+def screen_gate(proto, screens_path=None):
+    inv = _find_artifact(proto, ("screen-inventory.json",), screens_path)
+    if not inv or not _SCREEN_CHECK.is_file():
+        return None, "skipped (no screen-inventory.json beside prototype, or checker missing)"
+    proc = subprocess.run([sys.executable, str(_SCREEN_CHECK), str(proto), str(inv)],
+                          capture_output=True, text=True)
+    return proc.returncode == 0, (proc.stdout.strip() or proc.stderr.strip())
+
+
+def edge_gate(proto, edges_path=None, screens_path=None):
+    ec = _find_artifact(proto, ("edge-cases.json",), edges_path)
+    if not ec or not _EDGE_CHECK.is_file():
+        return None, "skipped (no edge-cases.json beside prototype, or checker missing)"
+    inv = _find_artifact(proto, ("screen-inventory.json",), screens_path)
+    cmd = [sys.executable, str(_EDGE_CHECK), str(proto), str(ec)]
+    if inv:  # lets each edge resolve to its screen's route; without it the check is whole-app
+        cmd.append(str(inv))
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    return proc.returncode == 0, (proc.stdout.strip() or proc.stderr.strip())
+
+
 # ── gate 2: WCAG contrast over the actual theme ───────────────────────────────
 def contrast_gate(css_path, a11y):
     text = css_path.read_text(errors="ignore")
@@ -212,7 +304,8 @@ def contrast_gate(css_path, a11y):
 
 
 def main(argv):
-    args, a11y, scan, report, include_vendored = [], "AA", ["app", "components", "lib"], None, False
+    args, a11y, scan, report, include_vendored, theme = [], "AA", ["app", "components", "lib"], None, False, None
+    intel, screens_path, edges_path = None, None, None
     i = 0
     while i < len(argv):
         if argv[i] == "--a11y" and i + 1 < len(argv):
@@ -223,6 +316,14 @@ def main(argv):
             include_vendored = True; i += 1
         elif argv[i] == "--report" and i + 1 < len(argv):
             report = argv[i + 1]; i += 2
+        elif argv[i] == "--theme" and i + 1 < len(argv):
+            theme = argv[i + 1]; i += 2
+        elif argv[i] == "--intel" and i + 1 < len(argv):
+            intel = argv[i + 1]; i += 2
+        elif argv[i] == "--screens" and i + 1 < len(argv):
+            screens_path = argv[i + 1]; i += 2
+        elif argv[i] == "--edges" and i + 1 < len(argv):
+            edges_path = argv[i + 1]; i += 2
         else:
             args.append(argv[i]); i += 1
     if not args:
@@ -253,6 +354,26 @@ def main(argv):
     out += ["## 5. Font loading (Turbopack-safe — no remote @import)",
             "```", font_out or "(skipped)", "```", ""]
 
+    # gate 6 (theme fidelity: committed Step 2.6 identity theme actually applied)
+    fidelity_ok, fidelity_out = fidelity_gate(proto, theme)
+    out += ["## 6. Theme fidelity (committed Step 2.6 theme applied, not regressed to neutral)",
+            "```", fidelity_out or "(skipped)", "```", ""]
+
+    # gate 7 (directive fidelity: build honors design_directives — safeguard/guidance)
+    directive_ok, directive_out = directive_gate(proto, intel)
+    out += ["## 7. Directive fidelity (design_directives honored: safeguards, guidance)",
+            "```", directive_out or "(skipped)", "```", ""]
+
+    # gate 8 (screen coverage: every Must screen in the inventory was actually built)
+    screen_ok, screen_out = screen_gate(proto, screens_path)
+    out += ["## 8. Screen coverage (every Must screen built with its declared states)",
+            "```", screen_out or "(skipped)", "```", ""]
+
+    # gate 9 (edge-case coverage: every Must edge case is handled in the build)
+    edge_ok, edge_out = edge_gate(proto, edges_path, screens_path)
+    out += ["## 9. Edge-case coverage (every Must edge case handled in its screen)",
+            "```", edge_out or "(skipped)", "```", ""]
+
     # gate 2
     css = proto / "app" / "globals.css"
     if css.is_file():
@@ -264,15 +385,21 @@ def main(argv):
         contrast_ok, cfails = False, [f"globals.css not found at {css}"]
         out += ["## 2. WCAG contrast", "globals.css not found — cannot verify.", ""]
 
-    # emoji_ok / contract_ok / font_ok may be None (skipped) — only fail when explicitly False
+    # gates that may be None (skipped) only fail when explicitly False
     blocked = not (lint_ok and contrast_ok and emoji_ok is not False
-                   and contract_ok is not False and font_ok is not False)
+                   and contract_ok is not False and font_ok is not False
+                   and fidelity_ok is not False and directive_ok is not False
+                   and screen_ok is not False and edge_ok is not False)
     verdict = "🔴 BLOCKED" if blocked else "🟢 PASS"
     out += ["## Verdict", f"- Token compliance: {'🟢' if lint_ok else '🔴'}",
             f"- WCAG {a11y} contrast: {'🟢' if contrast_ok else '🔴'}",
             f"- UX copy (no emoji/dash): {'🟢' if emoji_ok else ('—' if emoji_ok is None else '🔴')}",
             f"- Component contracts: {'🟢' if contract_ok else ('—' if contract_ok is None else '🔴')}",
             f"- Font loading (no remote @import): {'🟢' if font_ok else ('—' if font_ok is None else '🔴')}",
+            f"- Theme fidelity (no neutral regression): {'🟢' if fidelity_ok else ('—' if fidelity_ok is None else '🔴')}",
+            f"- Directive fidelity (safeguards/guidance): {'🟢' if directive_ok else ('—' if directive_ok is None else '🔴')}",
+            f"- Screen coverage (Must screens built): {'🟢' if screen_ok else ('—' if screen_ok is None else '🔴')}",
+            f"- Edge-case coverage (Must edges handled): {'🟢' if edge_ok else ('—' if edge_ok is None else '🔴')}",
             "", f"**{verdict}**"]
     if cfails:
         out += ["", "### Contrast failures", *[f"- {f}" for f in cfails]]
@@ -287,7 +414,11 @@ def main(argv):
           f"WCAG {a11y}={'PASS' if contrast_ok else 'FAIL'} · "
           f"copy={'PASS' if emoji_ok else ('—' if emoji_ok is None else 'FAIL')} · "
           f"contracts={'PASS' if contract_ok else ('—' if contract_ok is None else 'FAIL')} · "
-          f"font={'PASS' if font_ok else ('—' if font_ok is None else 'FAIL')}")
+          f"font={'PASS' if font_ok else ('—' if font_ok is None else 'FAIL')} · "
+          f"fidelity={'PASS' if fidelity_ok else ('—' if fidelity_ok is None else 'FAIL')} · "
+          f"directive={'PASS' if directive_ok else ('—' if directive_ok is None else 'FAIL')} · "
+          f"screens={'PASS' if screen_ok else ('—' if screen_ok is None else 'FAIL')} · "
+          f"edges={'PASS' if edge_ok else ('—' if edge_ok is None else 'FAIL')}")
     if report:
         print(f"  → {report}")
     for f in cfails:

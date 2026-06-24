@@ -82,6 +82,11 @@ def validate(intel_path, brief_path=None):
     if errors:
         return errors, warnings
 
+    # brief feature ids (for feature_refs referential integrity + Must-coverage)
+    brief_feature_ids = {f.get("id") for f in (brief or {}).get("core_features", []) if f.get("id")}
+    feature_refs_seen = set()  # union of feature_refs declared on goals + tasks
+    any_feature_refs = False   # was the field used at all? (graceful fallback if not)
+
     # ── meta ───────────────────────────────────────────────────────────────────
     meta = d["meta"]
     oc = meta.get("overall_confidence", "")
@@ -135,6 +140,12 @@ def validate(intel_path, brief_path=None):
             _enum(g.get("priority"), GOAL_PRIO, f"user_goals[{i}].priority", errors)
             if g.get("user_type_ref") not in ut_ids:
                 errors.append(f"user_goals[{i}].user_type_ref '{g.get('user_type_ref')}' not in user_types")
+            if "feature_refs" in g:
+                any_feature_refs = True
+                for fr in g.get("feature_refs") or []:
+                    feature_refs_seen.add(fr)
+                    if brief_feature_ids and fr not in brief_feature_ids:
+                        errors.append(f"user_goals[{i}].feature_refs '{fr}' not in brief.core_features")
             stmt = (g.get("statement") or "").lower()
             if any(n in stmt for n in ("button", "screen", "page", "click", "tab ", "modal")):
                 warnings.append(f"user_goals[{i}].statement reads like a feature, not an outcome: {g.get('statement')!r}")
@@ -157,6 +168,12 @@ def validate(intel_path, brief_path=None):
                 errors.append(f"core_tasks[{i}].user_type_ref '{t.get('user_type_ref')}' not in user_types")
             if t.get("goal_ref") not in goal_ids:
                 errors.append(f"core_tasks[{i}].goal_ref '{t.get('goal_ref')}' not in user_goals")
+            if "feature_refs" in t:
+                any_feature_refs = True
+                for fr in t.get("feature_refs") or []:
+                    feature_refs_seen.add(fr)
+                    if brief_feature_ids and fr not in brief_feature_ids:
+                        errors.append(f"core_tasks[{i}].feature_refs '{fr}' not in brief.core_features")
 
     # ── workflow_complexity ─────────────────────────────────────────────────────
     wc = d["workflow_complexity"]
@@ -274,9 +291,22 @@ def validate(intel_path, brief_path=None):
         brief_text = json.dumps(brief, ensure_ascii=False).lower()
         if any(h in brief_text for h in SENSITIVE_DATA_HINTS) and not comp:
             errors.append("brief references sensitive data (health/financial/biometric/minor) but compliance_requirements is empty")
-        # coverage: features exist but no tasks/goals derived
-        if brief.get("core_features") and (not goals or not tasks):
-            errors.append("brief has core_features but intelligence has no user_goals/core_tasks (coverage gap)")
+        # feature traceability: the brief's contractual scope must survive into 2.5.
+        # When feature_refs are used → enforce per-Must-feature coverage; else fall back to
+        # the binary coverage check (back-compat) + nudge to add refs for a real gate.
+        must_feats = [f for f in brief.get("core_features", []) if f.get("priority") == "Must"]
+        if not any_feature_refs:
+            if brief.get("core_features") and (not goals or not tasks):
+                errors.append("brief has core_features but intelligence has no user_goals/core_tasks (coverage gap)")
+            elif must_feats:
+                warnings.append("core_tasks/user_goals have no feature_refs — per-feature traceability not "
+                                "enforced; add feature_refs so every Must feature is provably served")
+        else:
+            for f in must_feats:
+                fid = f.get("id")
+                if fid and fid not in feature_refs_seen:
+                    errors.append(f"Must feature '{fid}' ({f.get('name', '')}) is not referenced by any "
+                                  "core_task/user_goal.feature_refs — contractual intent dropped between brief and 2.5")
         # analytics features but minimal density
         if any(h in brief_text for h in ANALYTICS_HINTS) and isinstance(band, int) and band <= 2:
             warnings.append("brief mentions analytics/report/dashboard but data_density.overall_band ≤ 2 — verify")
