@@ -23,7 +23,16 @@ prototype earns a real aesthetic instead of falling back to the neutral shadcn d
 ## How Step 2.6 uses it
 
 1. **Brief Inference** (anti-slop): name domain, audience/tone, the one `mood_adjective`, motion depth.
-2. **Pick a direction** — a `named_system` from the library (read its `DESIGN.md`) or an archetype.
+2. **Pick a direction** — a `named_system` from the library (read its `DESIGN.md`) or, only if nothing
+   fits, an archetype. **Search the library first, by *mood / visual adjective*, NOT by industry.**
+   The 178 systems are indexed by visual character (calm, clean, minimal, trust, mono, warm…), not by
+   vertical — searching `medical` / `fintech` / `gov` returns nothing and falsely concludes "no fit",
+   so you fall back to an archetype and throw away a documented design language. Run
+   `design_systems.py search <mood>` for the `mood_adjective` and 2-3 neighbours (e.g. a calm clinical
+   portal → `search calm` → **openai** "calm teal-black"; `search clean` → **clean**/**cal**). Prefer a
+   `named_system` whenever one is close; reach for an archetype only when the search genuinely turns up
+   nothing, and **record the terms you tried in `direction.library_search`** (the gate nudges if it is
+   missing on an archetype).
 3. **Resolve tokens** (oklch) + give `fg_hex`/`bg_hex` for every contrast pair.
 4. **Obey constraints** — `a11y_target` + `density_target` must echo `design_directives`; any brand
    color failing the WCAG floor is adjusted (taste never overrides POUR).

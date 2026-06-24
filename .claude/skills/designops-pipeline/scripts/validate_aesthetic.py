@@ -143,6 +143,16 @@ def validate(aesthetic_path, intel_path=None, contract_path=None):
             ref = dir_.get("spec_ref", "")
             if name not in ref:
                 warnings.append(f"direction.spec_ref should point at library/{name}/DESIGN.md")
+    elif dtype == "archetype":
+        # An archetype throws away the library's documented design language, and the library is indexed
+        # by visual character (not industry) — so an industry search ("medical") falsely returns nothing.
+        # Nudge: an archetype must record the mood/visual terms searched, proving the library was checked.
+        searched = dir_.get("library_search")
+        if not searched or (isinstance(searched, (list, str)) and not searched):
+            warnings.append("direction.type=archetype but direction.library_search is empty — search the "
+                            "library by mood/visual adjective (calm/clean/minimal/trust…), NOT by industry, "
+                            "before falling back to an archetype; record the terms tried so the skip is a "
+                            "decision, not a default (a close named_system keeps its DESIGN.md guidance).")
 
     # ── tokens: the full identity color set (light + dark), not just primary ───────
     tok = d["tokens"]
