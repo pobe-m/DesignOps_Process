@@ -31,7 +31,10 @@ Eleven objective, deterministic gates over the BUILT prototype:
  11. Axis fidelity — runs lint_axis_fidelity.py: the NON-colour axes Step 2.6 committed in
      aesthetic.json (typography line-height/weight, pill shape, motion easing) must be applied in
      globals.css (@theme re-points + [data-slot=*] rules), not declared-but-unapplied.
-Gates 3-11 skip cleanly (—) if their checker / source artifact is missing.
+Gates 3-11 skip cleanly (—) if their checker / source artifact is missing. With --strict
+a skipped gate counts as a FAILURE (block) — use it only on a complete full-pipeline build
+where every artifact (brand.config / intelligence / aesthetic / screen-inventory / edge-cases)
+sits beside the prototype; on a partial run --strict will block on the legitimately-absent ones.
 
 By default it audits the GENERATED surface only — `components/ui` (vendored shadcn primitives),
 any `docs/` dir (DS demos + these reports), and node_modules/.next/out are auto-excluded, so you
@@ -40,9 +43,9 @@ to audit everything.
 
 Usage:
   python3 audit_prototype.py <prototype_dir> [--a11y AA|AAA] [--scan app,components,lib]
-                             [--include-vendored] [--report path.md] [--theme brand.config.json]
-                             [--intel intelligence.json] [--screens screen-inventory.json]
-                             [--edges edge-cases.json]
+                             [--include-vendored] [--strict] [--report path.md]
+                             [--theme brand.config.json] [--intel intelligence.json]
+                             [--screens screen-inventory.json] [--edges edge-cases.json]
 Exit 0 = PASS, 1 = BLOCKED. Zero-dependency (imports vendored contrast.py + lint_hardcodes.py).
 """
 
@@ -334,8 +337,31 @@ def contrast_gate(css_path, a11y):
     return len(failures) == 0, lines, failures
 
 
+# ── gate-result helpers (a gate is True=pass / False=fail / None=skipped) ──────
+def _ok(v, strict):
+    """Does a gate result count as passing? A skipped gate (None) passes unless --strict."""
+    if v is None:
+        return not strict
+    return v is True
+
+
+def _badge(v, strict):
+    """Verdict glyph for a gate result, honoring --strict for skipped gates."""
+    if v is None:
+        return "🔴" if strict else "—"
+    return "🟢" if v else "🔴"
+
+
+def _word(v, strict):
+    """Console word for a gate result, honoring --strict for skipped gates."""
+    if v is None:
+        return "FAIL" if strict else "—"
+    return "PASS" if v else "FAIL"
+
+
 def main(argv):
     args, a11y, scan, report, include_vendored, theme = [], "AA", ["app", "components", "lib"], None, False, None
+    strict = False
     intel, screens_path, edges_path, aes_path = None, None, None, None
     i = 0
     while i < len(argv):
@@ -345,6 +371,8 @@ def main(argv):
             scan = argv[i + 1].split(","); i += 2
         elif argv[i] == "--include-vendored":
             include_vendored = True; i += 1
+        elif argv[i] == "--strict":
+            strict = True; i += 1
         elif argv[i] == "--report" and i + 1 < len(argv):
             report = argv[i + 1]; i += 2
         elif argv[i] == "--theme" and i + 1 < len(argv):
@@ -365,7 +393,7 @@ def main(argv):
     if not proto.is_dir():
         print(f"[audit_prototype] ✗ prototype dir not found: {proto}", file=sys.stderr); return 1
 
-    out = [f"# Audit Report — Step 4.7 (a11y target: {a11y})", ""]
+    out = [f"# Audit Report — Step 4.7 (a11y target: {a11y}{', strict' if strict else ''})", ""]
 
     # gate 1
     lint_ok, lint_out = lint_gate(proto, scan, include_vendored)
@@ -428,24 +456,24 @@ def main(argv):
         contrast_ok, cfails = False, [f"globals.css not found at {css}"]
         out += ["## 2. WCAG contrast", "globals.css not found — cannot verify.", ""]
 
-    # gates that may be None (skipped) only fail when explicitly False
-    blocked = not (lint_ok and contrast_ok and emoji_ok is not False
-                   and contract_ok is not False and font_ok is not False
-                   and fidelity_ok is not False and directive_ok is not False
-                   and screen_ok is not False and edge_ok is not False
-                   and font_fid_ok is not False and axis_ok is not False)
+    # gates that may be None (skipped) pass unless --strict; lint_ok/contrast_ok are never None
+    skippable = (emoji_ok, contract_ok, font_ok, fidelity_ok, directive_ok,
+                 screen_ok, edge_ok, font_fid_ok, axis_ok)
+    blocked = not (lint_ok and contrast_ok and all(_ok(v, strict) for v in skippable))
     verdict = "🔴 BLOCKED" if blocked else "🟢 PASS"
+    if strict:
+        verdict += " (strict — skipped gates count as failures)"
     out += ["## Verdict", f"- Token compliance: {'🟢' if lint_ok else '🔴'}",
             f"- WCAG {a11y} contrast: {'🟢' if contrast_ok else '🔴'}",
-            f"- UX copy (no emoji/dash): {'🟢' if emoji_ok else ('—' if emoji_ok is None else '🔴')}",
-            f"- Component contracts: {'🟢' if contract_ok else ('—' if contract_ok is None else '🔴')}",
-            f"- Font loading (no remote @import): {'🟢' if font_ok else ('—' if font_ok is None else '🔴')}",
-            f"- Theme fidelity (no neutral regression): {'🟢' if fidelity_ok else ('—' if fidelity_ok is None else '🔴')}",
-            f"- Directive fidelity (safeguards/guidance): {'🟢' if directive_ok else ('—' if directive_ok is None else '🔴')}",
-            f"- Screen coverage (Must screens built): {'🟢' if screen_ok else ('—' if screen_ok is None else '🔴')}",
-            f"- Edge-case coverage (Must edges handled): {'🟢' if edge_ok else ('—' if edge_ok is None else '🔴')}",
-            f"- Font fidelity (committed font applied): {'🟢' if font_fid_ok else ('—' if font_fid_ok is None else '🔴')}",
-            f"- Axis fidelity (type/shape/motion applied): {'🟢' if axis_ok else ('—' if axis_ok is None else '🔴')}",
+            f"- UX copy (no emoji/dash): {_badge(emoji_ok, strict)}",
+            f"- Component contracts: {_badge(contract_ok, strict)}",
+            f"- Font loading (no remote @import): {_badge(font_ok, strict)}",
+            f"- Theme fidelity (no neutral regression): {_badge(fidelity_ok, strict)}",
+            f"- Directive fidelity (safeguards/guidance): {_badge(directive_ok, strict)}",
+            f"- Screen coverage (Must screens built): {_badge(screen_ok, strict)}",
+            f"- Edge-case coverage (Must edges handled): {_badge(edge_ok, strict)}",
+            f"- Font fidelity (committed font applied): {_badge(font_fid_ok, strict)}",
+            f"- Axis fidelity (type/shape/motion applied): {_badge(axis_ok, strict)}",
             "", f"**{verdict}**"]
     if cfails:
         out += ["", "### Contrast failures", *[f"- {f}" for f in cfails]]
@@ -458,15 +486,15 @@ def main(argv):
     # console summary
     print(f"[audit_prototype] {verdict} — token={'PASS' if lint_ok else 'FAIL'} · "
           f"WCAG {a11y}={'PASS' if contrast_ok else 'FAIL'} · "
-          f"copy={'PASS' if emoji_ok else ('—' if emoji_ok is None else 'FAIL')} · "
-          f"contracts={'PASS' if contract_ok else ('—' if contract_ok is None else 'FAIL')} · "
-          f"font={'PASS' if font_ok else ('—' if font_ok is None else 'FAIL')} · "
-          f"fidelity={'PASS' if fidelity_ok else ('—' if fidelity_ok is None else 'FAIL')} · "
-          f"directive={'PASS' if directive_ok else ('—' if directive_ok is None else 'FAIL')} · "
-          f"screens={'PASS' if screen_ok else ('—' if screen_ok is None else 'FAIL')} · "
-          f"edges={'PASS' if edge_ok else ('—' if edge_ok is None else 'FAIL')} · "
-          f"fontfid={'PASS' if font_fid_ok else ('—' if font_fid_ok is None else 'FAIL')} · "
-          f"axisfid={'PASS' if axis_ok else ('—' if axis_ok is None else 'FAIL')}")
+          f"copy={_word(emoji_ok, strict)} · "
+          f"contracts={_word(contract_ok, strict)} · "
+          f"font={_word(font_ok, strict)} · "
+          f"fidelity={_word(fidelity_ok, strict)} · "
+          f"directive={_word(directive_ok, strict)} · "
+          f"screens={_word(screen_ok, strict)} · "
+          f"edges={_word(edge_ok, strict)} · "
+          f"fontfid={_word(font_fid_ok, strict)} · "
+          f"axisfid={_word(axis_ok, strict)}")
     if report:
         print(f"  → {report}")
     for f in cfails:
