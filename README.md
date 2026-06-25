@@ -7,7 +7,7 @@ with accessibility and design quality checked automatically along the way.**
 
 Powered by Claude Code · Next.js 16 · shadcn/ui · Tailwind v4
 
-`Model A (imports @npsin-oreo/design-system)` · `WCAG-gated` · `138-brand aesthetic library` · `11-gate audit` · `127/127 selftest`
+`Model A (imports @npsin-oreo/design-system)` · `WCAG-gated` · `138-brand aesthetic library` · `11-gate audit` · `142/142 selftest`
 
 </div>
 
@@ -69,7 +69,7 @@ runs. It works for any kind of product — there are no fixed industry templates
 |---|---|
 | 🧠 **Product Intelligence** | Infers 10 measurable dimensions (each with evidence + confidence) → an open `design_directives` object. No fixed industry presets. |
 | 🎨 **Aesthetic Direction** | Picks one of **138 named design systems** (apple, linear, stripe, resend…) or an archetype, then resolves the **full identity token set** (surfaces, text, accent, border + dark theme — not just primary), **contrast-checked**, so the look actually flows into the prototype. Optionally infers it from a TOR mockup. |
-| 🛡️ **Real gates, not vibes** | Every stage has a zero-dependency validator. The audit gate is a *script* with **8 checks** — hardcodes · WCAG contrast (light + dark) · UX copy · component-contracts · font-imports · theme-fidelity · directive-fidelity · screen-coverage — exit 1 blocks handoff. |
+| 🛡️ **Real gates, not vibes** | Every stage has a zero-dependency validator. The audit gate is a *script* with **11 checks** — hardcodes · WCAG contrast (light + dark) · UX copy · component-contracts · font-imports · theme-fidelity · directive-fidelity · screen-coverage · edge-coverage · font-fidelity · axis-fidelity — exit 1 blocks handoff. `finalize-prototype.sh` chains it (`--strict`) with the critique + usability integrity checks so the audit can't be skipped. |
 | 🧵 **Intent makes it to the build** | A traceability spine carries the contractual scope end-to-end: every **Must** feature and scored must-have is provably served by a task, a screen, and a built route — checked, not assumed. |
 | 🔁 **Scored quality loop** | Step 4.6 critique = 6 weighted dimensions + Nielsen's 10 heuristics + an anti-slop gate (Banned Defaults). |
 | 🧩 **19 design skills, folded in** | ux-writing, brandkit (DTCG tokens), image-to-code, migrate-design-system, performance, governance — vendored into the skill. See [`references/SKILLS.md`](.claude/skills/designops-pipeline/references/SKILLS.md). |
@@ -117,7 +117,8 @@ cd output/prototype && npm install && npm run dev   # → http://localhost:3000
 | **3.5** | Screens from flows + DS mapping (+ feature/scoring coverage) | `screen-inventory.json` · `design-first-draft.md` | `validate_screens.py` |
 | **4** | Scaffold the Next.js prototype | `output/prototype/` | — |
 | **4.6** | Scored critique → auto-fix critical + quick wins | `docs/critique.md` | (agent) |
-| **4.7** | **Audit gate** — 8 checks (token · WCAG · copy · contracts · font · theme · directive · screens) | `docs/audit-report.md` | `audit_prototype.py` 🔴 exit 1 |
+| **3.7** | Edge-Case Analysis (UI Stack × CORRECT) per Must screen | `edge-cases.json` | `validate_edgecases.py` |
+| **4.7** | **Audit gate** — 11 checks (token · WCAG · copy · contracts · font · theme · directive · screens · edges · font-fidelity · axis) · `finalize-prototype.sh` chains it `--strict` + critique + usability | `docs/audit-report.md` | `audit_prototype.py` 🔴 exit 1 |
 | **4.8** | Storybook QA (opt-in) | — | `addon-a11y` axe pass |
 | **5** | Figma output (5 pages: Cover/Foundations/Components/Screens/Flows) — generated from artifacts | Figma file | `figma_prep.py` + Figma MCP |
 
@@ -163,6 +164,16 @@ instead of the neutral shadcn default ("design slop").
 Output `aesthetic.json` + a ready-to-apply `output/brand.config.json` (carrying the whole theme) for
 `/generate-prototype` — and audit **gate 6** blocks if the build regresses to neutral.
 
+**Beyond colour — themeable axes + DS-native theming.** `@npsin-oreo/design-system@0.3.0` exposes
+**`axis_tokens`** in its contract — non-colour design axes (`ease · duration · leading · tracking ·
+weight_heading · container · section`). So a product can theme typography/motion/layout, not just
+colour, from one config. The multi-product path: `brand.config.json` → `npx ds-brand-build` →
+`app/brand.css` → `@import "./brand.css"` in `globals.css`. The DS root stays the single source of
+token **names** (`token-contract.json`: colour + scalar + axis); each product is one config. The
+token tiers are **primitive → semantic → component** (Tailwind's `@theme`/`--color-*` is the
+*utility-binding* layer, not a tier). Gates 2 / 6 / 11 follow the local `@import`, so this verifies
+end-to-end without losing any check.
+
 ---
 
 ## 🔁 Quality loop — scored, then gated
@@ -191,10 +202,19 @@ python3 .claude/skills/designops-pipeline/scripts/audit_prototype.py \
 | 6 | **Theme fidelity** | `lint_theme_fidelity.py` — the identity theme Step 2.6 committed in `brand.config.json` is actually applied in `globals.css` (no regression to the neutral default) | 🔴 block |
 | 7 | **Directive fidelity** | `lint_directive_fidelity.py` — the build honors `design_directives`: destructive actions guarded when `safeguard_level` is on, an empty-state when `guidance_level` is guided (density/nav advisory) | 🔴 block |
 | 8 | **Screen coverage** | `lint_screen_coverage.py` — every **Must** screen in `screen-inventory.json` was built as an `app/<route>/page.tsx` rendering its declared loading/empty/error states | 🔴 block |
+| 9 | **Edge-case coverage** | `lint_edge_coverage.py` — every **Must** edge in `edge-cases.json` is handled in its screen (empty/error/loading/partial state · inline validation · destructive confirm) | 🔴 block |
+| 10 | **Font fidelity** | `lint_font_fidelity.py` — the committed `font_sans` actually reaches `layout`/`globals.css` (not the scaffold default) | 🔴 block |
+| 11 | **Axis fidelity** | `lint_axis_fidelity.py` — the non-colour axes (type leading/weight, pill shape, motion easing) committed in `aesthetic.json` are applied in the CSS | 🔴 block |
 
-> Gates 6-8 auto-discover their source artifact (`brand.config.json` / `intelligence.json` /
-> `screen-inventory.json`) beside the prototype, or take `--theme` / `--intel` / `--screens`, and
-> skip cleanly when it is absent.
+> Gates 6-11 auto-discover their source artifact (`brand.config.json` / `intelligence.json` /
+> `screen-inventory.json` / `edge-cases.json` / `aesthetic.json`) beside the prototype, or take
+> `--theme` / `--intel` / `--screens` / `--edges` / `--aesthetic`, and skip cleanly when absent.
+> Gates 2 / 6 / 11 also follow a local `@import "./brand.css"` (DS-native theming — see below).
+>
+> **`finalize-prototype.sh` is the enforcement seam:** it always runs the audit (`--strict` on a
+> complete build, so a skipped artifact-backed gate counts as a failure) plus the critique +
+> usability integrity checks — so the audit can't be silently forgotten before handoff.
+> `bash …/scripts/finalize-prototype.sh output/prototype --a11y AA`
 
 > **Exit 1 = BLOCKED** — handoff/Figma is blocked until it passes. Categories are machine-checked,
 > not eyeballed. It audits the **generated surface only** (`components/ui` and any `docs/` dir are
@@ -264,7 +284,7 @@ Designops-project-test/
 │   │   ├── validate_{brief,intelligence,flows,screens,aesthetic}.py
 │   │   ├── audit_prototype.py            #    Step 4.7 gate (11: token·WCAG·copy·contracts·font·theme·directive·screen·edge·fontfid·axis)
 │   │   ├── lint_{hardcodes,component_contracts,font_imports,theme_fidelity,…}.py
-│   │   └── selftest.sh                   #    127/127 regression guard
+│   │   └── selftest.sh                   #    142/142 regression guard
 │   └── references/
 │       ├── aesthetics/                   #    🎨 138-brand library + taste + contrast.py
 │       ├── tokens/                       #    DTCG token foundation + validators (brandkit)
@@ -324,7 +344,7 @@ Designops-project-test/
 ## 🧪 Tests
 
 ```bash
-bash .claude/skills/designops-pipeline/scripts/selftest.sh        # 127/127, runs on macOS stock bash 3.2
+bash .claude/skills/designops-pipeline/scripts/selftest.sh        # 142/142, runs on macOS stock bash 3.2
 ```
 
 Covers bash-3.2 compatibility, every validator (valid passes / invalid fails), the full 11-gate audit
@@ -337,12 +357,18 @@ import-only setup, and the DTCG token gates.
 
 ## 🧱 Model A — consumes the looloo design system
 
-The build **imports** `@npsin-oreo/design-system` (looloo) from GitHub Packages — the DS is never
-vendored or copied. Components are immutable (`@npsin-oreo/design-system/<name>` in `node_modules`);
-customise via Step 2.6 token + `[data-slot=*]` overrides, never by editing them. The brand library +
-DTCG token kit still ship under `references/`. `run_pipeline.sh` resolves `--ds` (the looloo SOURCE,
-read only for inventory/token-contract): `TOR_DS_PATH` env → `../looloo-design-system` sibling.
-Requires `GITHUB_TOKEN` (`export GITHUB_TOKEN=$(gh auth token)`).
+The build **imports** `@npsin-oreo/design-system` (looloo) from GitHub Packages (pinned, currently
+**0.3.0**) — the DS is never vendored or copied. Components are immutable
+(`@npsin-oreo/design-system/<name>` in `node_modules`); customise via Step 2.6 token +
+`[data-slot=*]` overrides, never by editing them. The brand library + DTCG token kit still ship under
+`references/`. `run_pipeline.sh` resolves `--ds` (the looloo SOURCE, read only for
+inventory/token-contract): `TOR_DS_PATH` env → `../looloo-design-system` sibling. Requires
+`GITHUB_TOKEN` (`export GITHUB_TOKEN=$(gh auth token)`).
+
+`setup-prototype.sh` scaffolds the Tailwind-v4 guards every prototype needs: `@source not "../public"`
++ `@source not "../.next"` (v4 auto-source-detection otherwise reads binary `*.webp`/`*.png` as text →
+garbage classes → Turbopack 500), a Next `.gitignore`, and a `.vscode/settings.json` that silences the
+false "Unknown at rule" lint on `@source`/`@theme`/`@apply`.
 
 The `--handoff` token bridge (hex → oklch into a whitelabel repo) is **deprecated**. Under Model A
 the DS is the imported `@npsin-oreo/design-system` package and theming is owned by Step 2.6 → the product
