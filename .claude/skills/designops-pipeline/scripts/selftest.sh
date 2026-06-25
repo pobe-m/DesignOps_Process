@@ -444,6 +444,8 @@ grep -q 'dependency confusion' "$SETUP" && ok "dependency-confusion note on scop
 grep -q '@source not "../public"' "$SETUP" && ok "globals.css excludes public/ from Tailwind scan (gotcha #2)" || bad "missing @source not ../public (binary scan trap)"
 grep -q '@source not "../.next"' "$SETUP" && ok "globals.css excludes .next/ from Tailwind scan (gotcha #3)" || bad "missing @source not ../.next (next/image cache binary scan trap)"
 grep -q '\.gitignore' "$SETUP" && grep -qE '/\.next/' "$SETUP" && ok "scaffold writes a Next .gitignore (node_modules/.next/out)" || bad "scaffold .gitignore missing"
+# .vscode/settings.json silences VS Code's false "Unknown at rule" on Tailwind v4 directives
+grep -q '.vscode/settings.json' "$SETUP" && grep -q 'unknownAtRules' "$SETUP" && ok "scaffold writes .vscode/settings.json (silence Tailwind v4 at-rule lint)" || bad "scaffold .vscode/settings.json missing"
 # behaviour: no token → errors with the export hint (no silent fallback)
 OUT="$( (unset GITHUB_TOKEN; bash "$SETUP" --out "$TMP/spA" 2>&1) )"; rm -rf "$TMP/spA"
 echo "$OUT" | grep -q 'GITHUB_TOKEN is required' && ok "no token → hard error (not fallback)" || bad "missing token should hard-error"
