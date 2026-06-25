@@ -131,6 +131,23 @@ GITIGNORE
   log "wrote .gitignore → $GI"
 fi
 
+# .vscode/settings.json — Tailwind v4 at-rules (@source/@theme/@apply/@custom-variant) are valid but
+# unknown to VS Code's built-in CSS validator, which flags them as "Unknown at rule" (false problems;
+# the CSS compiles fine + the audit gates pass). Silence them so a fresh prototype opens clean.
+VS="$PROTO/.vscode/settings.json"
+if [ ! -f "$VS" ]; then
+  mkdir -p "$PROTO/.vscode"
+  cat > "$VS" <<'VSCODE'
+{
+  "//": "Tailwind v4 at-rules (@source, @theme, @apply, @custom-variant) are valid but unknown to VS Code's built-in CSS validator; silence the false 'Unknown at rule' problems. For full support install 'Tailwind CSS IntelliSense' (bradlc.vscode-tailwindcss).",
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore"
+}
+VSCODE
+  log "wrote .vscode/settings.json → $VS (silence Tailwind v4 unknown-at-rule lint)"
+fi
+
 # ── .npmrc so npm can fetch a scoped DS from GitHub Packages (auth required) ────
 # SECURITY (dependency confusion): the `<scope>:registry=` line BINDS the whole DS scope to GitHub
 # Packages, so npm never resolves @<scope>/* from public npmjs — even though the name is unclaimed
