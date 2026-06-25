@@ -8,7 +8,7 @@
 #
 #   export GITHUB_TOKEN=$(gh auth token)   # GitHub Packages requires auth, even for public packages
 #   bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out ./output
-#                                        [--ds-pkg @npsin-oreo/design-system@0.2.0] [--ds-name …] [--ds-registry …]
+#                                        [--ds-pkg @npsin-oreo/design-system@0.3.0] [--ds-name …] [--ds-registry …]
 #
 # bash 3.2 safe.
 
@@ -17,7 +17,7 @@ set -uo pipefail
 OUT="./output"
 # Pinned default DS version (security: never float to `latest` — a republished/compromised `latest`
 # would flow straight into builds). Bump this when adopting a new published DS release.
-DS_VERSION="0.2.0"
+DS_VERSION="0.3.0"
 IMPORT_PKG="@npsin-oreo/design-system@${DS_VERSION}"  # install spec (pinned; override with --ds-pkg)
 DS_NAME=""             # bare package name for CSS @import/@source + transpilePackages (default from IMPORT_PKG)
 # Registry for the DS scope. The DS publishes to GitHub Packages, which requires auth even for public

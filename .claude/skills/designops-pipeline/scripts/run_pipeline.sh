@@ -365,14 +365,20 @@ Process (anti-slop — deciding BEFORE generating; see $AESTHETICS_DIR/taste/des
    ready-to-drop brand.config.json that CARRIES THE WHOLE THEME (its colors.* must EQUAL
    tokens.colors.*). Step 4 / generate-prototype overwrites the prototype's :root + .dark from it;
    if it carries only primary, the look regresses to neutral and the Step 4.7 fidelity gate blocks.
+   OPTIONAL brand_config.axes {ease,duration,leading,tracking,weight_heading,container,section} —
+   the non-colour axes the DS contract exposes (axis_tokens, v0.3.0+). Set the ones your axes block
+   resolved; `npx ds-brand-build` emits them into brand.css (@theme re-points + :root vars), so
+   typography/motion/layout theme through the contract too (gates 2/6/11 follow the @import). Keys
+   must be ⊆ the DS contract's axis_tokens — validate_aesthetic checks this when given the contract.
 
 Shape: { meta, brief_inference{domain,audience_tone,mood_adjective,motion_depth,rationale},
 direction{type,name,category,spec_ref,why_fit},
 signature{border_style,elevation,type_weight,tracking},
 tokens{radius,font_sans,font_mono,colors:{light:{...18 tokens},dark:{...18 tokens}}},
+axes{color,typography,shape,elevation,spacing,motion each {source,rationale,resolved?}},
 contrast_checks:[{pair,fg_hex,bg_hex,ratio,large?,ui?}],
 constraints{a11y_target,density_target,dark_mode},
-brand_config{project_name,radius,font_sans,font_mono,colors:{light:{...},dark:{...}}} }
+brand_config{project_name,radius,font_sans,font_mono,colors:{light:{...},dark:{...}},axes?:{ease,leading,tracking,...}} }
 PROMPT
   _generate "$PROMPT_AES" "Step 2.6 — pick + resolve aesthetic direction" "$AESTHETIC_JSON"
 fi

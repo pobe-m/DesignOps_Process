@@ -321,11 +321,13 @@ def validate(aesthetic_path, intel_path=None, contract_path=None):
             warnings.append(f"token contract not read ({contract_path}) — skipped contract check")
         else:
             allowed = set(contract.get("color_tokens", [])) | set(contract.get("scalar_tokens", []))
+            axis_allowed = set(contract.get("axis_tokens", []))   # Phase B: non-colour themeable axes
             if not allowed:
                 warnings.append("token contract lists no tokens — skipped contract check")
             else:
-                # metadata / structural keys that are not themeable DS tokens
-                NON_TOKEN = {"project_name", "colors", "dark_mode", "signature"}
+                # metadata / structural keys that are not themeable DS colour/scalar tokens
+                # ("axes" is its own block, validated against axis_tokens separately below)
+                NON_TOKEN = {"project_name", "colors", "dark_mode", "signature", "axes"}
                 # additive semantic EXTENSIONS (Phase 3): warning/info/success map to NEW CSS vars
                 # (bg-warning, …) — they don't override a DS token, so a strict contract that predates
                 # them must still allow them. The build gates verify they're applied (theme fidelity
@@ -343,6 +345,17 @@ def validate(aesthetic_path, intel_path=None, contract_path=None):
                         if k not in allowed:
                             errors.append(f"{src}.{k!r} is not in {pkg}'s token contract (nor an allowed "
                                           "semantic extension) — 2.6 may only theme tokens the DS exposes")
+                    # axis block (Phase B): validate each axis key against the contract's axis_tokens
+                    axes_node = node.get("axes")
+                    if isinstance(axes_node, dict) and axes_node:
+                        if not axis_allowed:
+                            warnings.append(f"{src}.axes is set but {pkg}'s contract exposes no axis_tokens "
+                                            "(older DS) — axes can't be verified; republish the DS to enforce")
+                        else:
+                            for k in axes_node:
+                                if k not in axis_allowed:
+                                    errors.append(f"{src}.axes.{k!r} is not in {pkg}'s axis_tokens — 2.6 may "
+                                                  "only theme non-colour axes the DS exposes")
     else:
         # No contract → brand_config keys are NOT verified against the DS. Every key here
         # becomes a `--key` CSS-var override in the prototype; a name the DS doesn't define

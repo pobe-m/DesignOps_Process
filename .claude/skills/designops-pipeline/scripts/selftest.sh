@@ -222,6 +222,12 @@ PY
 python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aesthetic.json" "$TMP/aes_intel.json" "$TMP/contract.json" >/dev/null 2>&1 && ok "tokens ⊆ contract → exit 0" || bad "valid tokens within contract should pass"
 python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d['tokens']['glow_accent']='oklch(0.7 0.2 30)';json.dump(d,open('$TMP/aes_contract_bad.json','w'))"
 python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_contract_bad.json" "$TMP/aes_intel.json" "$TMP/contract.json" >/dev/null 2>&1 && bad "token outside contract should fail" || ok "token not in DS contract → exit 1 (BLOCKED)"
+# axis_tokens (Phase B/C1): brand_config.axes validated against contract.axis_tokens
+python3 -c "import json;c=json.load(open('$TMP/contract.json'));c['axis_tokens']=['ease','leading','tracking','container'];json.dump(c,open('$TMP/contract_axes.json','w'))"
+python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d.setdefault('brand_config',{})['axes']={'ease':'cubic-bezier(0.2,0,0,1)','leading':'1.6'};json.dump(d,open('$TMP/aes_axes_ok.json','w'))"
+python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_axes_ok.json" "$TMP/aes_intel.json" "$TMP/contract_axes.json" >/dev/null 2>&1 && ok "brand_config.axes ⊆ axis_tokens → exit 0" || bad "valid axes within contract should pass"
+python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d.setdefault('brand_config',{})['axes']={'wobble':'9'};json.dump(d,open('$TMP/aes_axes_bad.json','w'))"
+python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_axes_bad.json" "$TMP/aes_intel.json" "$TMP/contract_axes.json" >/dev/null 2>&1 && bad "unknown axis should fail" || ok "axis not in axis_tokens → exit 1 (BLOCKED)"
 
 # ── T10. Audit gate (Step 4.7) — runs real scripts over a fake prototype ──────
 echo "[T10] audit gate — clean passes, hardcode + low-contrast block"
