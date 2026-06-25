@@ -320,6 +320,30 @@ python3 "$SCRIPTS_DIR/lint_theme_fidelity.py" "$PF/app/globals.css" "$SEMTHEME" 
 python3 -c "p='$PF/app/globals.css';s=open(p).read().replace('--border: oklch(0.9 0 0);','--border: oklch(0.9 0 0); --warning: #f5a623; --warning-foreground: #0d0d0d;');open(p,'w').write(s)"
 python3 "$SCRIPTS_DIR/lint_theme_fidelity.py" "$PF/app/globals.css" "$SEMTHEME" >/dev/null 2>&1 && ok "extended semantic applied → exit 0" || bad "applied semantic token wrongly blocked"
 faithful_css
+# gate 6 + 2 — DS-native theming: tokens applied via a LOCAL @import "./brand.css" must be followed
+brand_css() { cat > "$PF/app/brand.css" <<'CSS'
+:root {
+  --background: oklch(1 0 0); --foreground: oklch(0.2 0 0);
+  --card: oklch(1 0 0); --card-foreground: oklch(0.2 0 0);
+  --primary: oklch(0.45 0.2 264); --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0 0); --secondary-foreground: oklch(0.2 0 0);
+  --muted: oklch(0.96 0 0); --muted-foreground: oklch(0.45 0 0);
+  --accent: oklch(0.9 0.05 264); --accent-foreground: oklch(0.3 0.12 264);
+  --border: oklch(0.9 0 0);
+}
+CSS
+}
+brand_css
+printf '@import "@npsin-oreo/design-system/styles.css";\n@import "./brand.css";\n:root { --ease-brand: cubic-bezier(0.2,0,0,1); }\n' > "$PF/app/globals.css"
+python3 "$SCRIPTS_DIR/audit_prototype.py" "$PF" --a11y AA >/dev/null 2>&1 && ok "theme applied via @import ./brand.css → gate 6+2 follow it (PASS)" || bad "gate should resolve a local @import brand.css"
+# cascade order preserved: a later neutral :root in globals overrides brand.css → still caught
+printf '@import "./brand.css";\n:root { --primary: oklch(0.3 0 0); --accent: oklch(0.92 0 0); }\n' > "$PF/app/globals.css"
+python3 "$SCRIPTS_DIR/lint_theme_fidelity.py" "$PF/app/globals.css" "$PF/brand.config.json" >/dev/null 2>&1 && bad "a later neutral :root must override brand.css and be caught" || ok "inline @import keeps cascade order: neutral override after import → blocked (gate 6)"
+# a PACKAGE @import (DS neutral base) is NOT followed → cannot sneak in to falsely pass
+printf '@import "@npsin-oreo/design-system/styles.css";\n:root { --ease-brand: cubic-bezier(0.2,0,0,1); }\n' > "$PF/app/globals.css"
+python3 "$SCRIPTS_DIR/lint_theme_fidelity.py" "$PF/app/globals.css" "$PF/brand.config.json" >/dev/null 2>&1 && bad "package @import must not be resolved (no local theme = fail)" || ok "package @import not followed → no local theme applied → blocked (gate 6)"
+rm -f "$PF/app/brand.css"
+faithful_css
 # gate 7 — directive fidelity: build must honor safeguard_level / guidance_level
 GD="$TMP/protoG"; mkdir -p "$GD/app/users"
 printf '{"design_directives":{"safeguard_level":"strict","guidance_level":"guided","density_target":2,"navigation_model":"single"}}' > "$GD/intelligence.json"

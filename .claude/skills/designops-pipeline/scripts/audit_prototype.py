@@ -141,19 +141,46 @@ def _to_hex(value):
     return oklch_to_hex(L, C, h)
 
 
+_IMPORT = re.compile(r"""@import\s+["']([^"']+)["']\s*;?""")
+
+
+def _read_css_with_imports(css_path, _depth=0):
+    """globals.css text with LOCAL `@import "./x.css"` replaced INLINE by the imported file's
+    content, so a generated brand.css carries the :root/.dark tokens the gates verify. Inline (not
+    appended) preserves cascade order, so a later neutral :root in globals still wins → a regression
+    is still caught. Package specifiers (@scope/…, bare names) are LEFT AS-IS — the DS neutral base
+    is never pulled in, so a prototype that never applied the theme still fails. One level, depth-guarded."""
+    css_path = Path(css_path)
+    try:
+        text = css_path.read_text(errors="ignore")
+    except OSError:
+        return ""
+    if _depth > 3:
+        return text
+
+    def _sub(m):
+        spec = m.group(1)
+        if not spec.startswith("."):   # local relative import only (never node_modules/DS package)
+            return m.group(0)
+        p = (css_path.parent / spec).resolve()
+        return _read_css_with_imports(p, _depth + 1) if p.is_file() else m.group(0)
+
+    return _IMPORT.sub(_sub, text)
+
+
 def _parse_blocks(css_text):
-    """Return {block_name: {token: hex}} for :root and .dark."""
+    """Return {block_name: {token: hex}} for :root and .dark. MERGES every matching block (a theme
+    may split tokens across globals.css + a generated brand.css); later definitions win (cascade)."""
     blocks = {}
     for name, sel in (("light", r":root"), ("dark", r"\.dark")):
-        m = re.search(sel + r"\s*\{(.*?)\}", css_text, re.S)
-        if not m:
-            continue
         toks = {}
-        for d in _DEF.finditer(m.group(1)):
-            hexv = _to_hex(d.group(2))
-            if hexv:
-                toks[d.group(1).lower()] = hexv
-        blocks[name] = toks
+        for m in re.finditer(sel + r"\s*\{(.*?)\}", css_text, re.S):
+            for d in _DEF.finditer(m.group(1)):
+                hexv = _to_hex(d.group(2))
+                if hexv:
+                    toks[d.group(1).lower()] = hexv
+        if toks:
+            blocks[name] = toks
     return blocks
 
 
@@ -315,7 +342,7 @@ def edge_gate(proto, edges_path=None, screens_path=None):
 
 # ── gate 2: WCAG contrast over the actual theme ───────────────────────────────
 def contrast_gate(css_path, a11y):
-    text = css_path.read_text(errors="ignore")
+    text = _read_css_with_imports(css_path)   # follow a local @import "./brand.css" (DS-native theming)
     blocks = _parse_blocks(text)
     threshold = WCAG_NORMAL.get(a11y, 4.5)
     failures, lines = [], []

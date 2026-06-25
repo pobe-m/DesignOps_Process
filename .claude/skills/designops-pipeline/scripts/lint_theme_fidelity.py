@@ -22,7 +22,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from audit_prototype import _parse_blocks, _to_hex  # oklch/hex → #hex (same math as the audit)
+from audit_prototype import _parse_blocks, _to_hex, _read_css_with_imports  # same math + @import resolution as the audit
 
 # the identity tokens that carry a system's character (must survive the bridge)
 IDENTITY = [
@@ -97,7 +97,7 @@ def check(css_path, theme_path):
     if not light:
         return [], ["no identity colors committed in theme — nothing to verify"]
 
-    blocks = _parse_blocks(css_path.read_text(errors="ignore"))
+    blocks = _parse_blocks(_read_css_with_imports(css_path))   # follow a local @import "./brand.css"
     if not blocks:
         return ["no :root/.dark token block parsed from globals.css"], notes
 
