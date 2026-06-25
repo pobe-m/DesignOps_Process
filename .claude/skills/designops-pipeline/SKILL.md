@@ -935,10 +935,18 @@ When done, log:
 
 ## Step 4.7 — Audit gate (before handoff/Figma)
 
-> **Run the objective gate first — don't eyeball it:**
+> **Run the chained gate first — don't eyeball it.** `finalize-prototype.sh` is the enforcement seam:
+> it always runs the audit (so it can't be skipped) plus the critique + usability integrity checks:
+> ```bash
+> bash .claude/skills/designops-pipeline/scripts/finalize-prototype.sh \
+>   {OUTPUT_DIR}/prototype --a11y <AA|AAA from design_directives.a11y_target>
+> ```
+> On a **complete** build it runs the audit `--strict` by default (a skipped gate = a failure, forcing
+> every artifact-backed gate to actually run); on a **partial** build add `--no-strict`. Or run the bare
+> audit directly:
 > ```bash
 > python3 .claude/skills/designops-pipeline/scripts/audit_prototype.py \
->   {OUTPUT_DIR}/prototype --a11y <AA|AAA from design_directives.a11y_target> \
+>   {OUTPUT_DIR}/prototype --a11y <AA|AAA from design_directives.a11y_target> [--strict] \
 >   --report {OUTPUT_DIR}/prototype/docs/audit-report.md
 > ```
 > Exit 1 = **BLOCKED**. This recomputes WCAG contrast from globals.css (oklch → sRGB, light + dark)

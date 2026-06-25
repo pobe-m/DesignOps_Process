@@ -27,7 +27,7 @@ echo "bash: $BASH_VERSION"
 
 # ── T1. bash 3.2 compatibility ────────────────────────────────────────────────
 echo "[T1] bash 3.2 compatibility"
-for s in "$RUN" "$SCRIPTS_DIR/setup-prototype.sh" "$0"; do
+for s in "$RUN" "$SCRIPTS_DIR/setup-prototype.sh" "$SCRIPTS_DIR/finalize-prototype.sh" "$0"; do
   [ -f "$s" ] || continue
   /bin/bash -n "$s" 2>/dev/null && ok "syntax: $(basename "$s")" || bad "syntax: $(basename "$s")"
 done
@@ -248,6 +248,15 @@ export default function Page() {
 }
 TSX
 python3 "$SCRIPTS_DIR/audit_prototype.py" "$PROTO" --a11y AA >/dev/null 2>&1 && ok "clean prototype → exit 0 (PASS)" || bad "clean prototype should pass"
+# --strict: the same clean prototype has no artifacts beside it, so gates 6-11 skip — under
+# --strict a skipped gate counts as a failure, so this must BLOCK (guards the silent-skip gap).
+python3 "$SCRIPTS_DIR/audit_prototype.py" "$PROTO" --a11y AA --strict >/dev/null 2>&1 && bad "--strict should block when artifact-backed gates are skipped" || ok "--strict turns skipped gates into a block → exit 1 (BLOCKED)"
+# finalize-prototype.sh wrapper: --no-strict on the clean prototype (no critique/usability
+# artifacts) chains the gates and passes; default (strict) blocks on the skipped gates.
+if [ -f "$SCRIPTS_DIR/finalize-prototype.sh" ]; then
+  bash "$SCRIPTS_DIR/finalize-prototype.sh" "$PROTO" --a11y AA --no-strict >/dev/null 2>&1 && ok "finalize-prototype --no-strict → all gates pass (exit 0)" || bad "finalize-prototype --no-strict should pass on the clean prototype"
+  bash "$SCRIPTS_DIR/finalize-prototype.sh" "$PROTO" --a11y AA >/dev/null 2>&1 && bad "finalize-prototype (strict default) should block on skipped gates" || ok "finalize-prototype default is strict → exit 1 (BLOCKED)"
+fi
 # inject a hardcoded hex + a raw palette utility → token gate must block
 cat > "$PROTO/app/bad.tsx" <<'TSX'
 export const C = () => <div style={{ color: "#ff0000" }} className="bg-gray-500">x</div>;

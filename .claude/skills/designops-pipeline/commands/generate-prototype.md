@@ -425,10 +425,22 @@ Run through every generated file and verify:
 
 ## Step 5.6 — Audit gate (before handoff)
 
-> **Run the objective gate — it writes the report and decides PASS/BLOCKED:**
+> **Run the chained quality gate — one command runs critique-integrity + the audit + usability-integrity,
+> so the audit can't be silently skipped:**
+> ```bash
+> bash .claude/skills/designops-pipeline/scripts/finalize-prototype.sh \
+>   output/prototype --a11y <AA|AAA>
+> ```
+> On a **complete** build this runs the audit with `--strict` by default (a skipped gate counts as a
+> failure — it forces every artifact-backed gate to actually run). For a **partial** build (some upstream
+> artifacts not generated) add `--no-strict` so legitimately-absent gates skip cleanly instead of blocking.
+> The wrapper auto-detects the a11y target from `design_directives.a11y_target` if `--a11y` is omitted,
+> and writes `output/prototype/docs/audit-report.md`.
+>
+> **Or run the bare audit directly** (no critique/usability chaining):
 > ```bash
 > python3 .claude/skills/designops-pipeline/scripts/audit_prototype.py \
->   output/prototype --a11y <AA|AAA> --report output/prototype/docs/audit-report.md
+>   output/prototype --a11y <AA|AAA> [--strict] --report output/prototype/docs/audit-report.md
 > ```
 > Exit 1 = BLOCKED. It recomputes WCAG contrast from `globals.css` (oklch→sRGB, light + dark) and
 > lints the screens for hardcoded values — A + B are machine-checked. Audits the generated surface
@@ -451,6 +463,10 @@ Run through every generated file and verify:
 - a11y target from `aesthetic.json`/`intelligence.json` `design_directives.a11y_target` (AAA for public-sector)
 - The script writes `output/prototype/docs/audit-report.md`
 - If **BLOCKED** (exit 1) → loop back, fix, re-run until exit 0, then write the handoff doc
+- **Prefer `finalize-prototype.sh`** — it is the enforcement seam: it always runs the audit (so it
+  can't be forgotten) and, on a complete build, runs it `--strict` so an artifact-backed gate that
+  silently skipped (missing `brand.config` / `intelligence` / `aesthetic` / `screen-inventory` /
+  `edge-cases`) now blocks instead of passing unnoticed
 
 ## Step 5.7 — Usability Test Layer (simulated — Step 4.8)
 
