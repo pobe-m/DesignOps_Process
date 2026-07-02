@@ -1041,8 +1041,10 @@ If BLOCKED → loop back, fix per the report, and re-audit until it passes befor
 
 Runs on `out/index.html` (after `npm run build`): **axe-core** WCAG A/AA (button/link names, image alt,
 `lang`, `<title>`, ARIA, landmarks, heading order), **hover/focus-state contrast** (`verify_states`),
-modal **focus-trap** (`verify_focustrap`, when a trigger selector is given), plus a render-based
-**anti-slop** report (`taste_audit`, advisory). Blocking gates exit 1.
+modal **focus-trap** (`verify_focustrap`, when a trigger selector is given), a render-based **anti-slop**
+report (`taste_audit`, advisory), plus a **geometry + universal-design** report (`geometry_audit`,
+advisory): off-4px-grid spacing, WCAG 2.2 §2.5.8 target size (<24px), tiny text, optical misalignment,
+component metric drift (`--strict` makes a sub-24px target a hard fail). Blocking gates exit 1.
 ```bash
 # inside output/prototype after build — see references/runtime-audit/README.md
 node scripts/runtime/audit_runtime.mjs out/index.html [--dark] [--open=<sel> --dialog=<sel>]

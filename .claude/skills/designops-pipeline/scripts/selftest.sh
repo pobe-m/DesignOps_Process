@@ -391,11 +391,12 @@ AUD_OUT="$(python3 "$SCRIPTS_DIR/audit_prototype.py" "$GD" --a11y AA 2>&1)"
 case "$AUD_OUT" in *"directive=FAIL"*) ok "audit_prototype runs gate 7 (directive)";; *) bad "gate 7 not wired into audit_prototype";; esac
 # Step 4.7b runtime audit — scripts present; orchestrator degrades gracefully (no Playwright → exit 0)
 RT="$SCRIPTS_DIR/../references/runtime-audit/scripts"
-[ -f "$RT/audit_runtime.mjs" ] && [ -f "$RT/axe_audit.mjs" ] && [ -f "$RT/verify_states.mjs" ] && ok "runtime-audit scripts vendored" || bad "runtime-audit scripts missing"
+[ -f "$RT/audit_runtime.mjs" ] && [ -f "$RT/axe_audit.mjs" ] && [ -f "$RT/verify_states.mjs" ] && [ -f "$RT/geometry_audit.mjs" ] && ok "runtime-audit scripts vendored" || bad "runtime-audit scripts missing"
 if command -v node >/dev/null 2>&1; then
-  for s in audit_runtime axe_audit verify_states verify_focustrap taste_audit; do node --check "$RT/$s.mjs" 2>/dev/null || bad "runtime script $s.mjs syntax"; done
+  for s in audit_runtime axe_audit verify_states verify_focustrap taste_audit geometry_audit; do node --check "$RT/$s.mjs" 2>/dev/null || bad "runtime script $s.mjs syntax"; done
   echo '<!doctype html><html lang="en"><head><title>x</title></head><body><button>Go</button></body></html>' > "$TMP/rt.html"
   node "$RT/audit_runtime.mjs" "$TMP/rt.html" >/dev/null 2>&1 && ok "runtime audit skips cleanly w/o Playwright → exit 0" || bad "runtime audit should skip (exit 0) without Playwright"
+  out=$(node "$RT/geometry_audit.mjs" "$TMP/rt.html" 2>&1); echo "$out" | grep -q "SKIPPED" && [ "$(node "$RT/geometry_audit.mjs" "$TMP/rt.html" >/dev/null 2>&1; echo $?)" = "0" ] && ok "geometry_audit degrades gracefully (SKIPPED → exit 0)" || bad "geometry_audit should SKIP + exit 0 without Playwright"
 else
   ok "node absent — runtime-audit syntax/skip checks N/A"
 fi

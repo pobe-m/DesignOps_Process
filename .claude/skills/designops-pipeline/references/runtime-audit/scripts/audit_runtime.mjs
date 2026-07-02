@@ -77,6 +77,14 @@ if (!taste.skipped) {
   console.log(taste.out.split("\n").map((l) => `    ${l}`).join("\n"));
 }
 
+// geometry + universal-design audit — measured, report-only here (--strict standalone to gate)
+const geometry = run("geometry_audit.mjs");
+if (!geometry.skipped) {
+  anyRan = true;
+  console.log(`\n  geometry (8pt grid · WCAG 2.2 target size · universal design, advisory):`);
+  console.log(geometry.out.split("\n").map((l) => `    ${l}`).join("\n"));
+}
+
 if (!anyRan) {
   console.log("  all gates SKIPPED — Playwright not installed.");
   console.log("  enable:  npm i -D playwright && npx playwright install chromium");
