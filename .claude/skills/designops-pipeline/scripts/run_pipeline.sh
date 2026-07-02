@@ -344,6 +344,37 @@ elif [[ -f "$BRIEF_JSON" ]]; then
   log "intelligence.json not generated yet — flows (Step 3) need its design_directives"
 fi
 
+# ── step 2.5b: intelligence → scenario edges (runs parallel with 2.6) ─────────
+# Scenario/requirement edge cases — the 10 intelligence dimensions pushed to their edge. One
+# altitude ABOVE 3.7's screen-state edges: it discovers MISSING flows before Step 3 (may_inject_flow),
+# then hands those flows to 3.5/3.7. Severity is driven by the directives, not taste.
+SCENARIO_EDGES_JSON="$OUT_DIR/scenario-edges.json"
+if [[ -f "$INTEL_JSON" && ! -f "$SCENARIO_EDGES_JSON" ]]; then
+  step "Step 2.5b — Scenario Edge Discovery (intelligence → scenario-edges.json)"
+  PROMPT_SE="$OUT_DIR/.prompt_scenario_edges.txt"
+  cat > "$PROMPT_SE" << PROMPT
+Read "$INTEL_JSON" (the 10 dimensions + design_directives) and "$BRIEF_JSON", then produce
+"$SCENARIO_EDGES_JSON" following $SKILL_DIR/references/scenario-edge-layer.md.
+
+Walk each of the 10 intelligence dimensions to its boundary/failure scenario (see the taxonomy). Ground
+every edge in the dimension it rests on + refs (user_type_ref/task_ref/compliance_ref) that resolve into
+intelligence.json. Severity comes from intelligence, NOT taste: low/zero error_tolerance → its edges are
+must (+ a recovery in suggested_handling); high/safety decision_criticality → must; mandatory compliance
+→ a must edge. Snapshot the floors into meta.driven_by. When an edge implies a whole flow that doesn't
+exist yet, set may_inject_flow.inject=true + a flow_name (Step 3 adds it). A must edge resting on a
+low-confidence inference carries an open_question. Do NOT do screen-state edges (empty/loading/error per
+screen) — that is Step 3.7; this is the product/requirement altitude.
+PROMPT
+  _generate "$PROMPT_SE" "Step 2.5b — intelligence → scenario edges" "$SCENARIO_EDGES_JSON"
+fi
+if [[ -f "$SCENARIO_EDGES_JSON" ]]; then
+  step "Validating scenario-edges.json"
+  python3 "$SKILL_DIR/scripts/validate_scenario_edges.py" "$SCENARIO_EDGES_JSON" "$INTEL_JSON" || {
+    err "scenario-edges.json validation failed — fix it first, or re-run Step 2.5b"
+  }
+  log "✓ scenario-edges.json valid"
+fi
+
 # ── step 2.6 (Aesthetic): brief + intelligence → aesthetic.json ───────────────
 # Picks a *visual direction* (one of 138 named systems in the brand library, or an
 # archetype) and resolves it into concrete, contrast-checked tokens. This is the
@@ -463,6 +494,8 @@ Refine each brief.user_flow using design_directives:
 - safeguard_level → inject confirm / preview / undo steps on risky actions (mark step.safeguard)
 - mandatory_flows → ADD an injected flow per directive (e.g. consent, privacy_notice) with source_flow_ref:null
 - decision_criticality decision_points → mark step.decision:true where the user commits a high-stakes choice
+- if "$SCENARIO_EDGES_JSON" exists → ADD an injected flow for every scenario_edge with
+  may_inject_flow.inject=true (use its flow_name, source_flow_ref:null) — these are the missing flows 2.5b found
 
 Shape per flows.json: { meta, navigation_model, flows:[{id,name,source_flow_ref,user_type_ref,goal_ref,
 steps:[{n,action,decision,safeguard}],entry,exit,directives_applied:[]}], mandatory_flows:[{name,reason,injected}] }

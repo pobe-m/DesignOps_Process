@@ -9,6 +9,7 @@ generate against.
 | `interviews.example.json` | Interview + Affinity · 2.3b | **simulated** — `not_real_user_data:true`, every response `simulated:true` + `traces_to`, affinity insights ≤ medium confidence, `gate_log` shows a circular answer re-probed then passing |
 | `competitive.example.json` | Competitive Analysis · 2.4 | **inferred** — no competitor data given → market hypotheses; one `convention:"break"` with a reason |
 | `usability.example.json` | Usability Test · 4.8 | simulated — `not_real_user_testing:true`, automated finding cites an axe rule, persona walkthrough `simulated:true` |
+| `scenario-edges.example.json` | Scenario Edge · 2.5b | severity driven by directives (`error_tolerance:low` → must); 3 edges inject a flow into Step 3; one low-confidence must carries an `open_question` |
 
 Validate:
 
@@ -18,6 +19,7 @@ python3 $S/validate_research.py    $E/research.example.json
 python3 $S/validate_interviews.py  $E/interviews.example.json $E/research.example.json
 python3 $S/validate_competitive.py $E/competitive.example.json
 python3 $S/validate_usability.py   $E/usability.example.json $E/research.example.json
+python3 $S/validate_scenario_edges.py $E/scenario-edges.example.json   # + optional intelligence.json to enforce refs/floors
 ```
 
 ## inferred → hybrid → evidence_backed (ingest)

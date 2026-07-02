@@ -17,6 +17,9 @@ description: >
   Step 2.6 (Aesthetic Direction) picks one of 138 named design systems or an archetype and resolves
   it into the full identity token set (surfaces/text/accent/border + dark theme, not just primary),
   contrast-checked, + a signature → aesthetic.json + a brand.config.json that carries the whole theme.
+  Step 2.5b (Scenario Edge Discovery → scenario-edges.json) runs parallel with 2.6 and enumerates the
+  scenario/requirement edge cases — the 10 dimensions pushed to their edge — discovering MISSING flows
+  before Step 3 (one altitude above 3.7); severity driven by the directives, not taste.
   Step 3.7 (Edge-Case Analysis → edge-cases.json) enumerates the non-happy-path conditions every Must
   screen must survive, via UI Stack × CORRECT, severity driven by the Step 2.5 directives.
   Step 4 builds a POC prototype from a ready-made component library + mock data, Step 4.6 runs a
@@ -62,6 +65,8 @@ TOR (PDF / DOCX / Notion / GDocs)
                     │  intelligence.json  │  10 dims → design_directives
                     └──────────┬──────────┘
                                │  validate_intelligence.py (+ cross-dim invariants)
+                               ├─ Step 2.5b Scenario Edge Discovery (10 dims → scenario-edges.json)
+                               │            (parallel w/ 2.6; may_inject_flow → Step 3)
                                ▼  Step 2.6  Aesthetic Direction (138-brand library)
                     ┌─────────────────────────────┐
                     │  aesthetic.json             │  pick system/archetype → tokens

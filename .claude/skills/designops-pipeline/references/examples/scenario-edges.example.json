@@ -1,0 +1,72 @@
+{
+  "meta": {
+    "source_intelligence": "output/intelligence.json",
+    "generated_at": "2026-06-19T00:00:00Z",
+    "schema_version": "1.0",
+    "driven_by": { "error_tolerance": "low", "decision_criticality": "high", "compliance_mandatory": true },
+    "overall_confidence": "medium"
+  },
+  "scenario_edges": [
+    {
+      "id": "SE01",
+      "dimension": "workflow_complexity",
+      "scenario": "Two front-desk operators check in the same reservation at the same time from different kiosks.",
+      "trigger": "concurrent access to one entity with no lock",
+      "impact": "double check-in / room double-assigned; the second operator overwrites the first",
+      "severity": "must",
+      "suggested_handling": "optimistic lock + a 'this reservation was just updated' reconcile screen",
+      "may_inject_flow": { "inject": true, "flow_name": "reconcile-concurrent-edit" },
+      "user_type_ref": "UT01", "task_ref": "T01",
+      "source": "inferred", "confidence": "medium", "open_question": ""
+    },
+    {
+      "id": "SE02",
+      "dimension": "error_tolerance",
+      "scenario": "An operator overrides a blocked rate, then realizes it was the wrong reservation.",
+      "trigger": "an irreversible override with no undo",
+      "impact": "wrong rate committed; no way to roll back without a manager",
+      "severity": "must",
+      "suggested_handling": "confirm-with-reason before the override + an undo window + audit entry",
+      "may_inject_flow": { "inject": true, "flow_name": "undo-override" },
+      "user_type_ref": "UT02", "task_ref": "T02",
+      "source": "inferred", "confidence": "medium", "open_question": ""
+    },
+    {
+      "id": "SE03",
+      "dimension": "decision_criticality",
+      "scenario": "A duty manager approves an exception without seeing the reason the operator entered.",
+      "trigger": "a high-stakes approval made on incomplete information",
+      "impact": "unaccountable approvals the manager can't defend after the fact",
+      "severity": "must",
+      "suggested_handling": "surface the operator's reason + prior context on the approval screen; log the decision",
+      "may_inject_flow": { "inject": false, "flow_name": "" },
+      "user_type_ref": "UT02",
+      "source": "inferred", "confidence": "medium", "open_question": ""
+    },
+    {
+      "id": "SE04",
+      "dimension": "compliance_requirements",
+      "scenario": "A guest asks to withdraw consent for storing their ID scan after check-in.",
+      "trigger": "consent withdrawal on already-stored personal data",
+      "impact": "non-compliant data retention if there is no withdrawal path",
+      "severity": "must",
+      "suggested_handling": "a withdraw-consent flow that purges the ID scan + confirms deletion",
+      "may_inject_flow": { "inject": true, "flow_name": "withdraw-consent" },
+      "compliance_ref": "C01",
+      "source": "inferred", "confidence": "low",
+      "open_question": "Does local law require a specific retention/erasure window we must honor?"
+    },
+    {
+      "id": "SE05",
+      "dimension": "data_density",
+      "scenario": "The very first shift on a fresh property: zero reservations exist yet.",
+      "trigger": "empty state on the primary surface",
+      "impact": "a blank dashboard reads as broken; operator doesn't know the next action",
+      "severity": "should",
+      "suggested_handling": "empty state with value prop + a 'create walk-in' primary action",
+      "may_inject_flow": { "inject": false, "flow_name": "" },
+      "user_type_ref": "UT01",
+      "source": "inferred", "confidence": "medium", "open_question": ""
+    }
+  ]
+}

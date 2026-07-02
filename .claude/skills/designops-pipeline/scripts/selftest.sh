@@ -452,6 +452,20 @@ python3 "$SCRIPTS_DIR/validate_usability.py" "$TMP/usability.json" >/dev/null 2>
 python3 -c "import json;d=json.load(open('$TMP/usability.json'));d['meta']['not_real_user_testing']=False;json.dump(d,open('$TMP/usability_bad.json','w'))"
 python3 "$SCRIPTS_DIR/validate_usability.py" "$TMP/usability_bad.json" >/dev/null 2>&1 && bad "fake real test should fail" || ok "not_real_user_testing must be true → exit 1 (BLOCKED)"
 
+# scenario edges (2.5b) — standalone valid; severity floor from intelligence; ref resolution
+cat > "$TMP/scenario_edges.json" <<'JSON'
+{ "meta": { "schema_version": "1.0", "overall_confidence": "medium" },
+  "scenario_edges": [{ "id": "SE01", "dimension": "error_tolerance", "scenario": "irreversible override", "trigger": "t", "impact": "i", "severity": "must", "suggested_handling": "undo + audit", "may_inject_flow": { "inject": true, "flow_name": "undo-override" }, "task_ref": "T01", "source": "inferred", "confidence": "medium" }] }
+JSON
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/scenario_edges.json" >/dev/null 2>&1 && ok "valid scenario-edges (standalone) → exit 0" || bad "valid scenario-edges should pass"
+cat > "$TMP/intel_min.json" <<'JSON'
+{ "user_types": [], "core_tasks": [{ "id": "T01" }], "compliance_requirements": [], "error_tolerance": { "overall": "low" }, "decision_criticality": { "overall": "low" } }
+JSON
+python3 -c "import json;d=json.load(open('$TMP/scenario_edges.json'));d['scenario_edges'][0]['severity']='should';json.dump(d,open('$TMP/scenario_edges_bad.json','w'))"
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/scenario_edges_bad.json" "$TMP/intel_min.json" >/dev/null 2>&1 && bad "low error_tolerance edge must be 'must'" || ok "severity floor (error_tolerance low ⇒ must) → exit 1 (BLOCKED)"
+python3 -c "import json;d=json.load(open('$TMP/scenario_edges.json'));d['scenario_edges'][0]['task_ref']='T99';json.dump(d,open('$TMP/scenario_edges_ref.json','w'))"
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/scenario_edges_ref.json" "$TMP/intel_min.json" >/dev/null 2>&1 && bad "unresolved task_ref should fail" || ok "scenario edge ref resolves into intelligence → exit 1 (BLOCKED)"
+
 # ── T13. setup-prototype — Model A import-only (no vendored/rsync path) ────────
 echo "[T13] setup-prototype — import-only (no copy/rsync, token hard-required)"
 SETUP="$SCRIPTS_DIR/setup-prototype.sh"
