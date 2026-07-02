@@ -178,6 +178,13 @@ python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_feat.json" "$TMP/flows.json"
 # Must screen without a route → fails (gate 8 can't locate the built page)
 python3 -c "import json;d=json.load(open('$TMP/screens.json'));d['screens'][0].pop('route');json.dump(d,open('$TMP/sc_route.json','w'))"
 python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_route.json" "$TMP/flows.json" >/dev/null 2>&1 && bad "Must screen without route should fail" || ok "Must screen requires route → exit 1"
+# image_needs (3.5): valid unsourced need passes; a sourced asset missing alt/provenance fails; bad kind fails
+python3 -c "import json;d=json.load(open('$TMP/screens.json'));d['screens'][0]['image_needs']=[{'kind':'hero','purpose':'landing hero','required':True}];json.dump(d,open('$TMP/sc_img.json','w'))"
+python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_img.json" "$TMP/flows.json" >/dev/null 2>&1 && ok "valid image_needs (unsourced) → exit 0" || bad "valid image_needs should pass"
+python3 -c "import json;d=json.load(open('$TMP/screens.json'));d['screens'][0]['image_needs']=[{'kind':'hero','purpose':'p','sourced':{'source_url':'u','license':'Unsplash License','attribution':'by X'}}];json.dump(d,open('$TMP/sc_img_alt.json','w'))"
+python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_img_alt.json" "$TMP/flows.json" >/dev/null 2>&1 && bad "sourced image without alt should fail" || ok "sourced image needs provenance + alt → exit 1"
+python3 -c "import json;d=json.load(open('$TMP/screens.json'));d['screens'][0]['image_needs']=[{'kind':'meme','purpose':'p'}];json.dump(d,open('$TMP/sc_img_kind.json','w'))"
+python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_img_kind.json" "$TMP/flows.json" >/dev/null 2>&1 && bad "bad image kind should fail" || ok "image_needs.kind enum enforced → exit 1"
 
 # ── T9. Aesthetic gate (Step 2.6) ─────────────────────────────────────────────
 echo "[T9] aesthetic gate — valid passes, fake brand + low contrast fails"
@@ -222,6 +229,13 @@ python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_contrast.json" "$TMP/aes_
 # a11y_target must echo design_directives
 python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d['constraints']['a11y_target']='AAA';json.dump(d,open('$TMP/aes_a11y.json','w'))"
 python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_a11y.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && bad "a11y mismatch should fail" || ok "a11y_target must equal directive → exit 1"
+# typography (2.6): explicit weight-driven hierarchy passes; single-weight 'weight' emphasis fails; bad enum fails
+python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d['typography']={'scale_ratio':1.25,'emphasis_strategy':'weight','measure_ch':66,'ui_family':'Inter, sans-serif','hierarchy':[{'role':'h1','size':'2rem','weight':700,'leading':'1.1','tracking':'-0.02em'},{'role':'body','size':'1rem','weight':400,'leading':'1.5','tracking':'0'}]};json.dump(d,open('$TMP/aes_typo.json','w'))"
+python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_typo.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && ok "typography (weight-driven, 2 weights) → exit 0" || bad "valid typography should pass"
+python3 -c "import json;d=json.load(open('$TMP/aes_typo.json'));[l.__setitem__('weight',500) for l in d['typography']['hierarchy']];json.dump(d,open('$TMP/aes_typo_flat.json','w'))"
+python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_typo_flat.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && bad "weight emphasis with one weight should fail" || ok "weight emphasis needs ≥2 distinct weights → exit 1"
+python3 -c "import json;d=json.load(open('$TMP/aes_typo.json'));d['typography']['emphasis_strategy']='rainbow';json.dump(d,open('$TMP/aes_typo_enum.json','w'))"
+python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_typo_enum.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && bad "bad emphasis_strategy should fail" || ok "emphasis_strategy enum enforced → exit 1"
 # optional token-contract check: tokens must be ⊆ the DS contract (passed as 3rd arg)
 cat > "$TMP/contract.json" <<'PY'
 {"package":"@npsin-oreo/design-system","color_tokens":["background","foreground","card","card-foreground","popover","popover-foreground","primary","primary-foreground","secondary","secondary-foreground","muted","muted-foreground","accent","accent-foreground","destructive","border","input","ring"],"scalar_tokens":["radius","font_sans","font_mono"]}

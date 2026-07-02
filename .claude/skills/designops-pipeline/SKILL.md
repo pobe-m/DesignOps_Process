@@ -16,7 +16,8 @@ description: >
   open design_directives object (density, a11y target, safeguards, navigation) — industry-agnostic.
   Step 2.6 (Aesthetic Direction) picks one of 138 named design systems or an archetype and resolves
   it into the full identity token set (surfaces/text/accent/border + dark theme, not just primary),
-  contrast-checked, + a signature → aesthetic.json + a brand.config.json that carries the whole theme.
+  contrast-checked, + a signature + an explicit typographic hierarchy (scale + weight-driven emphasis,
+  not colour/italic) → aesthetic.json + a brand.config.json that carries the whole theme.
   Step 2.5b (Scenario Edge Discovery → scenario-edges.json) runs parallel with 2.6 and enumerates the
   scenario/requirement edge cases — the 10 dimensions pushed to their edge — discovering MISSING flows
   before Step 3 (one altitude above 3.7); severity driven by the directives, not taste.
@@ -658,6 +659,11 @@ Instead of scaffolding empty screens, assemble from ready-made patterns so it's 
 
 **Mock data rule:** must be realistic to the domain — real names, real IDs/record numbers, real document numbers · **never** "User 1" / "Lorem ipsum"
 Drive density/safeguards/navigation/a11y from `intelligence.json` → `design_directives` (Step 2.5), not from a fixed preset.
+
+**Asset-prep (imagery):** for each `screen-inventory.json` `image_needs[]`, source a **free-license** image
+(Unsplash/Pexels), place it via `next/image` with `alt`, and record `sourced { source_url, license,
+attribution, alt }` — the gate blocks a sourced need missing provenance or alt. Flat/utility screens
+declare no imagery. Mind the Tailwind v4 binary-scan guard. Full contract: `references/image-sourcing.md`.
 
 ### Import the DS package (Model A)
 

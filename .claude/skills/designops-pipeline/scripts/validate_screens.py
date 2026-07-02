@@ -19,6 +19,9 @@ PRIORITY = {"Must", "Should", "Could"}
 LAYOUT = {"card", "table", "dashboard", "form", "wizard_step", "list", "detail", "hub"}
 GAP_STATUS = {"missing", "partial"}
 STATES = {"loading", "empty", "error"}  # data-state coverage the built screen must render
+# image_needs (Step 3.5): does this screen need imagery, and of what kind? Driven by aesthetic
+# mood + screen type. A sourced asset must carry provenance (license/attribution) + alt.
+IMAGE_KINDS = {"hero", "illustration", "avatar", "thumbnail", "background", "empty_state_art", "icon_spot"}
 
 
 def _load(path):
@@ -100,6 +103,20 @@ def validate(screens_path, flows_path=None, brief_path=None):
         for st in s.get("states", []) or []:
             if st not in STATES:
                 errors.append(f"screens[{i}].states '{st}' must be one of {sorted(STATES)}")
+        # image_needs (optional) — does the screen need imagery? A SOURCED asset must carry
+        # provenance (license + attribution) + alt, or it can't ship (licensing + a11y).
+        for j, n in enumerate(s.get("image_needs", []) or []):
+            npath = f"screens[{i}].image_needs[{j}]"
+            if n.get("kind") not in IMAGE_KINDS:
+                errors.append(f"{npath}.kind must be one of {sorted(IMAGE_KINDS)} (got: {n.get('kind')!r})")
+            if not n.get("purpose"):
+                errors.append(f"{npath}.purpose is required (why this screen needs the image)")
+            sourced = n.get("sourced")
+            if sourced is not None:
+                for req in ("source_url", "license", "attribution", "alt"):
+                    if not sourced.get(req):
+                        errors.append(f"{npath}.sourced.{req} is required once an image is placed "
+                                      "(free-license needs provenance; alt is mandatory for a11y)")
         # a screen must declare components OR explicit gaps (not be empty)
         if not s.get("components") and not s.get("gaps"):
             errors.append(f"screens[{i}] has neither components nor gaps (empty screen)")

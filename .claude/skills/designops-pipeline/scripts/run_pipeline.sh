@@ -436,6 +436,11 @@ Process (anti-slop — deciding BEFORE generating; see $AESTHETICS_DIR/taste/des
 3b. Commit a signature object for the non-colour identity (expressed later via Tailwind utilities):
    { border_style: solid|translucent|none, elevation: flat|soft|layered,
      type_weight: regular|medium|semibold, tracking: tighter|tight|normal|wide }.
+3c. Commit a typography object — an EXPLICIT hierarchy, not just a font. From the system's DESIGN.md:
+   { scale_ratio (>1, e.g. 1.25), hierarchy:[{role, size, weight(100-900), leading, tracking}] for
+     h1..body..caption (≥2 roles), emphasis_strategy, measure_ch (45–90), ui_family, display_family }.
+   emphasis_strategy MUST be "weight" or "size" — hierarchy comes from weight+size, NOT extra colour/
+   italic/fonts (design-taste.md). If "weight", the hierarchy must use ≥2 distinct weights.
 4. Obey constraints: constraints.a11y_target MUST equal design_directives.a11y_target and
    constraints.density_target MUST equal design_directives.density_target; set
    constraints.dark_mode (true unless the product is explicitly light-only). A colour that
@@ -454,6 +459,7 @@ Process (anti-slop — deciding BEFORE generating; see $AESTHETICS_DIR/taste/des
 Shape: { meta, brief_inference{domain,audience_tone,mood_adjective,motion_depth,rationale},
 direction{type,name,category,spec_ref,why_fit},
 signature{border_style,elevation,type_weight,tracking},
+typography{scale_ratio,hierarchy:[{role,size,weight,leading,tracking}],emphasis_strategy,measure_ch,ui_family,display_family},
 tokens{radius,font_sans,font_mono,colors:{light:{...18 tokens},dark:{...18 tokens}}},
 axes{color,typography,shape,elevation,spacing,motion each {source,rationale,resolved?}},
 contrast_checks:[{pair,fg_hex,bg_hex,ratio,large?,ui?}],
@@ -638,6 +644,10 @@ Derive screens from FLOWS (each flow → its screens), driving every decision fr
 - a11y_target      → component variants + the Step 4.7 audit target
 - mandatory_flows  → each injected flow gets its screen(s) (e.g. consent, privacy_notice)
 - trust_emphasis   → evidence-on-demand / transparency affordances
+- image_needs      → per $SKILL_DIR/references/image-sourcing.md: from the screen type + the aesthetic mood
+                     (aesthetic.json direction/mood_adjective), does the screen need imagery? Add image_needs:[]
+                     (hero/illustration/avatar/thumbnail/empty_state_art). Flat/utility screens get NONE — don't
+                     add photography a Linear/dashboard look wouldn't use. Sourcing happens at Step 4.
 Coverage rule: EVERY flow in flows.json must have at least one screen; every screen.flow_refs must resolve.
 Traceability: give each screen a feature_refs:[] listing the brief.core_features ids it delivers. EVERY Must
 feature — and EVERY scoring_criteria.minimum_viable.must_have_features id — must be covered by ≥1 screen
@@ -647,7 +657,7 @@ If meta.overall_confidence=low (constrain_downstream), produce wireframe-level s
 
 screen-inventory.json shape: { meta:{must_have_features:[]}, screens:[{id,name,route,flow_refs:[],feature_refs:[],
 states:[loading|empty|error],user_type_ref,priority:Must|Should|Could, purpose, layout_primitive,
-components:[from the DS inventory], gaps:[{name,status:missing|partial,recommendation}], directive_drivers:[]}] }
+components:[from the DS inventory], image_needs:[{kind,purpose,required}], gaps:[{name,status:missing|partial,recommendation}], directive_drivers:[]}] }
 
 design system path: $DS_PATH
 design system inventory:
