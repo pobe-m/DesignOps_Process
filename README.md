@@ -1,13 +1,13 @@
 <div align="center">
 
-# 🎨 DesignOps Pipeline — TOR → Prototype
+# 🎨 DesignOps Pipeline — Product Intent → Prototype
 
-**Drop in a project brief → get a clear written spec and a working demo app —
-with accessibility and design quality checked automatically along the way.**
+**Drop in any product intent → get a clear written spec and a working demo app —
+with the users, edge cases, accessibility and design quality worked out automatically along the way.**
 
 Powered by Claude Code · Next.js 16 · shadcn/ui · Tailwind v4
 
-`Model A (imports @npsin-oreo/design-system)` · `WCAG-gated` · `138-brand aesthetic library` · `11-gate audit` · `142/142 selftest`
+`Any intent → brief` · `WCAG-gated` · `138-brand aesthetic library` · `11-gate audit` · `161/161 selftest`
 
 </div>
 
@@ -15,17 +15,19 @@ Powered by Claude Code · Next.js 16 · shadcn/ui · Tailwind v4
 
 ## In plain words
 
-You hand it a **project brief** (a TOR — the document that says what to build). It reads the brief,
-figures out who the users are and what matters to them, picks a look and feel, plans the screens, and
-**builds a clickable demo app** — then checks its own work for accessibility and quality before
-handing it off.
+You hand it **any product intent** — a full brief (a TOR), a PRD, a one-line idea, an existing product to
+redesign, meeting notes. It normalises that into a factual brief (asking you only what it genuinely can't
+infer), works out who the users are and what matters to them, picks a look and feel, finds the edge cases
+and the screens, and **builds a clickable demo app** — then checks its own work for accessibility and
+quality before handing it off. Test it, feed the results back, and it scores what to fix in the next round.
 
-> **Goes in:** a brief (PDF / Word / Notion / Google Docs).
+> **Goes in:** any intent (PDF / Word / Notion / Google Docs, or just a sentence).
 > **Comes out:** a clear written spec **+** a working demo you can open in a browser.
 
 Think of it as an assembly line for the early design of an app: each station does one job and won't
-pass the work on until it's correct. Good for designers, PMs, and engineers who want to go from
-"here's the scope" to "here's something to react to" fast.
+pass the work on until it's correct — and the thinner your input, the more it flags as a guess rather
+than inventing facts. Good for designers, PMs, and engineers who want to go from "here's the scope" (or
+"here's a hunch") to "here's something to react to" fast.
 
 ---
 
@@ -35,28 +37,35 @@ Every stage produces a file and passes through a **gate** (an automatic check) b
 runs. It works for any kind of product — there are no fixed industry templates.
 
 ```
-  TOR (PDF / DOCX / Notion / GDocs)
+  ANY PRODUCT INTENT (TOR / PRD / one-line idea / redesign / notes / analytics)
          │
-         ▼  1+2   read TOR → factual brief                    brief.md · brief.json    →  validate_brief.py
+         ▼  1.0   Intake — normalise any intent → factual brief   brief.md · brief.json    →  validate_brief.py
+         │          (4-way gate · confidence floor · asks only critical gaps)
          │
-         ▼  2.5   Product Intelligence (10 dims)              intelligence.json        →  validate_intelligence.py
-         │          → design_directives
+         ▼  2.3   User Research — personas / JTBD / pains          research.json            →  validate_research.py
+         │          + conditional current_state_journey / opportunities
+         ▼  2.3b  Interview + Affinity (simulated, honesty-gated)  interviews.json          →  validate_interviews.py
+         ▼  2.4   Competitive Analysis                             competitive.json         →  validate_competitive.py
          │
-         ▼  2.6   Aesthetic Direction (138-brand library)     aesthetic.json           →  validate_aesthetic.py
-         │          → brand.config.json                          + brand.config.json       (contrast from hex)
+         ▼  2.5   Product Intelligence (10 dims → design_directives)  intelligence.json     →  validate_intelligence.py
+         │          (every user_type traces back to a 2.3 persona)
+         ├─ 2.5b  Scenario Edge Discovery (10 dims → their edge)   scenario-edges.json      →  validate_scenario_edges.py
+         │          (discovers missing flows; runs parallel with 2.6)
+         ▼  2.6   Aesthetic Direction (138-brand library)         aesthetic.json           →  validate_aesthetic.py
+         │          + typography hierarchy + brand.config.json        + brand.config.json       (contrast from hex)
          │
-         ▼  3     refine user flows from directives           flows.json               →  validate_flows.py
+         ▼  3     refine user flows (+ inject 2.5b flows)         flows.json               →  validate_flows.py
+         ▼  3.5   screens from flows (+ image_needs) + draft      screen-inventory.json    →  validate_screens.py
+         ▼  3.7   Edge-Case Analysis (UI Stack × CORRECT)         edge-cases.json          →  validate_edgecases.py
          │
-         ▼  3.5   screens from flows (full coverage)          screen-inventory.json    →  validate_screens.py
-         │          + human draft                                + design-first-draft.md
-         │
-         ▼  4     scaffold Next.js prototype                  output/prototype/
-         │
+         ▼  4     scaffold Next.js prototype (+ free-license asset-prep)   output/prototype/
          ▼  4.6   scored critique (6 dims + Nielsen + anti-slop) → auto-fix
-         ▼  4.7   audit GATE — audit_prototype.py              docs/audit-report.md     🔴 exit 1 = blocked
-         │          tokens · WCAG contrast (light+dark) · no-emoji
-         ▼  4.7b  runtime audit (optional) — axe · states · focus-trap · taste   (Playwright)
-         ▼  4.8   Storybook QA (optional, opt-in)
+         ▼  4.7   audit GATE — audit_prototype.py (11 checks)     docs/audit-report.md     🔴 exit 1 = blocked
+         ▼  4.7b  runtime audit (optional) — axe · states · focus-trap · taste · geometry   (Playwright)
+         ▼  4.7c  Storybook QA (optional) · 4.8 Usability Test (simulated)
+         │
+         ▼  4.9   Feedback Loop — score test findings → prototype N+1   test-findings.json  →  validate_test_findings.py
+         │          (build → test → fix top-N → repeat until it converges)
          │
          ▼  5     Figma output — 5 pages, generated from artifacts   figma_prep.py + Figma MCP
 ```
@@ -67,11 +76,15 @@ runs. It works for any kind of product — there are no fixed industry templates
 
 | | |
 |---|---|
+| 🚪 **Any intent in (hourglass)** | A TOR, a PRD, a one-line idea, a redesign, notes — a thin 4-way gate normalises it into `brief.json`, sets a confidence floor, and asks you **only** the prototype-critical gaps it can't infer. The pipeline body never forks per input type. |
+| 🔬 **Discover before design** | Personas / JTBD / pains (2.3), a **simulated interview → affinity map** (2.3b), and a conditional as-is **journey → opportunities** — all honesty-gated (simulation is never passed off as real research). Every `user_type` traces back to a persona. |
 | 🧠 **Product Intelligence** | Infers 10 measurable dimensions (each with evidence + confidence) → an open `design_directives` object. No fixed industry presets. |
+| 🧨 **Scenario edges (2.5b)** | The 10 dimensions pushed to their edge — concurrency, irreversible actions, withdrawn consent, abandonment — surfaced as **missing flows** *before* the screens exist (one altitude above the 3.7 screen-state edges). |
 | 🎨 **Aesthetic Direction** | Picks one of **138 named design systems** (apple, linear, stripe, resend…) or an archetype, then resolves the **full identity token set** (surfaces, text, accent, border + dark theme — not just primary), **contrast-checked**, so the look actually flows into the prototype. Optionally infers it from a TOR mockup. |
 | 🛡️ **Real gates, not vibes** | Every stage has a zero-dependency validator. The audit gate is a *script* with **11 checks** — hardcodes · WCAG contrast (light + dark) · UX copy · component-contracts · font-imports · theme-fidelity · directive-fidelity · screen-coverage · edge-coverage · font-fidelity · axis-fidelity — exit 1 blocks handoff. `finalize-prototype.sh` chains it (`--strict`) with the critique + usability integrity checks so the audit can't be skipped. |
 | 🧵 **Intent makes it to the build** | A traceability spine carries the contractual scope end-to-end: every **Must** feature and scored must-have is provably served by a task, a screen, and a built route — checked, not assumed. |
-| 🔁 **Scored quality loop** | Step 4.6 critique = 6 weighted dimensions + Nielsen's 10 heuristics + an anti-slop gate (Banned Defaults). |
+| 🔁 **Scored quality loop → iteration** | Step 4.6 critique = 6 weighted dimensions + Nielsen's 10 heuristics + an anti-slop gate (Banned Defaults). Then **Step 4.9** scores real test feedback (`severity × reach × confidence`; observed > stated; systemic vs one-person quirk) into the next prototype's work-list — build → test → fix top-N → repeat until it converges. |
+| 📐 **Typography + geometry + imagery** | Step 2.6 commits an explicit type hierarchy (weight-driven emphasis). Step 3.5 flags which screens need imagery → free-license sourcing with provenance + alt. Step 4.7b adds a render-based geometry audit (8pt grid · WCAG 2.2 target size · min text). |
 | 🧩 **19 design skills, folded in** | ux-writing, brandkit (DTCG tokens), image-to-code, migrate-design-system, performance, governance — vendored into the skill. See [`references/SKILLS.md`](.claude/skills/designops-pipeline/references/SKILLS.md). |
 | 📦 **Model A (imports the DS)** | The build **imports** `@npsin-oreo/design-system` (looloo) from GitHub Packages — never vendored. Needs `GITHUB_TOKEN`. The brand library + token kit ship with the skill. |
 
@@ -85,6 +98,8 @@ export GITHUB_TOKEN=$(gh auth token)   # required — import the DS package from
 
 # 2. Run the full pipeline (DS inventory from the looloo source sibling)
 bash .claude/skills/designops-pipeline/scripts/run_pipeline.sh --tor docs/tor.pdf --ds ../looloo-design-system --out ./output
+#    …or start from any intent, no document needed:
+#    run_pipeline.sh --intent "a mobile app for splitting group expenses" --ds ../looloo-design-system --out ./output
 
 # 3. Generate the prototype from the draft (inside Claude Code)
 /generate-prototype --all
@@ -110,16 +125,23 @@ cd output/prototype && npm install && npm run dev   # → http://localhost:3000
 
 | Step | What it does | Output | Gate |
 |------|--------------|--------|------|
-| **1+2** | Read TOR → 8 categories + scoring criteria | `brief.md` · `brief.json` | `validate_brief.py` |
-| **2.5** | Product Intelligence — 10 dims → `design_directives` (+ feature traceability) | `intelligence.json` | `validate_intelligence.py` |
-| **2.6** | Aesthetic Direction — resolve the full identity theme | `aesthetic.json` · `brand.config.json` | `validate_aesthetic.py` |
-| **3** | Refine user flows from directives | `flows.json` | `validate_flows.py` |
-| **3.5** | Screens from flows + DS mapping (+ feature/scoring coverage) | `screen-inventory.json` · `design-first-draft.md` | `validate_screens.py` |
-| **4** | Scaffold the Next.js prototype | `output/prototype/` | — |
-| **4.6** | Scored critique → auto-fix critical + quick wins | `docs/critique.md` | (agent) |
+| **1.0 + 1+2** | Intake — normalise any product intent → 8 categories + scoring, set `input_type` + confidence floor | `brief.md` · `brief.json` | `validate_brief.py` |
+| **2.3** | User Research — personas / JTBD / pains (+ conditional journey / opportunities) | `research.json` | `validate_research.py` |
+| **2.3b** | Interview + Affinity — simulated persona role-play → affinity map (honesty-gated) | `interviews.json` | `validate_interviews.py` |
+| **2.4** | Competitive Analysis | `competitive.json` | `validate_competitive.py` |
+| **2.5** | Product Intelligence — 10 dims → `design_directives` (+ feature + persona coverage) | `intelligence.json` | `validate_intelligence.py` |
+| **2.5b** | Scenario Edge Discovery — 10 dims → their edge; injects missing flows into Step 3 | `scenario-edges.json` | `validate_scenario_edges.py` |
+| **2.6** | Aesthetic Direction — full identity theme + typography hierarchy | `aesthetic.json` · `brand.config.json` | `validate_aesthetic.py` |
+| **3** | Refine user flows from directives (+ injected 2.5b flows) | `flows.json` | `validate_flows.py` |
+| **3.5** | Screens from flows + DS mapping + `image_needs` (+ feature/scoring coverage) | `screen-inventory.json` · `design-first-draft.md` | `validate_screens.py` |
 | **3.7** | Edge-Case Analysis (UI Stack × CORRECT) per Must screen | `edge-cases.json` | `validate_edgecases.py` |
+| **4** | Scaffold the Next.js prototype (+ free-license asset-prep) | `output/prototype/` | — |
+| **4.6** | Scored critique → auto-fix critical + quick wins | `docs/critique.md` | (agent) |
 | **4.7** | **Audit gate** — 11 checks (token · WCAG · copy · contracts · font · theme · directive · screens · edges · font-fidelity · axis) · `finalize-prototype.sh` chains it `--strict` + critique + usability | `docs/audit-report.md` | `audit_prototype.py` 🔴 exit 1 |
-| **4.8** | Storybook QA (opt-in) | — | `addon-a11y` axe pass |
+| **4.7b** | Runtime audit (opt-in) — axe · states · focus-trap · taste · **geometry + universal-design** | — | Playwright (skips cleanly) |
+| **4.7c** | Storybook QA (opt-in) | — | `addon-a11y` axe pass |
+| **4.8** | Usability Test — heuristic + automated + simulated persona walkthrough | `usability.json` | `validate_usability.py` |
+| **4.9** | Feedback Loop — score real test feedback → the next prototype | `test-findings.json` | `validate_test_findings.py` |
 | **5** | Figma output (5 pages: Cover/Foundations/Components/Screens/Flows) — generated from artifacts | Figma file | `figma_prep.py` + Figma MCP |
 
 ---
@@ -153,6 +175,8 @@ instead of the neutral shadcn default ("design slop").
   (apple, linear-app, stripe, vercel, notion, resend, brutalism, glassmorphism, luxury…).
   Browse: `python3 …/aesthetics/scripts/design_systems.py list | search <term> | show <name>`.
 - **Anti-slop first** — name the one `mood_adjective` the result must earn before any token.
+- **Typography as a decision** — commits an explicit hierarchy (scale · size · weight · leading) with
+  **weight-driven emphasis**, not colour/italic; the gate rejects a "weight" strategy that uses one weight.
 - **From a mockup** — if the TOR ships a screenshot, infer the direction from it ([`image-to-code.md`](.claude/skills/designops-pipeline/references/image-to-code.md)).
 - **Full identity, not just a primary** — it resolves the whole semantic set (surfaces, text
   hierarchy, accent, border) for **light *and* dark**, so the chosen system's character actually
@@ -224,10 +248,22 @@ python3 .claude/skills/designops-pipeline/scripts/audit_prototype.py \
 
 Renders the built page in headless Chrome (Playwright) to catch what source can't show — **axe-core**
 (button/link names, image alt, `lang`, ARIA, landmarks, heading order), **hover/focus-state contrast**,
-modal **focus-trap**, plus a render-based **anti-slop** report. Opt-in; skips cleanly without Playwright.
+modal **focus-trap**, a render-based **anti-slop** report, plus a **geometry + universal-design** audit
+(8pt-grid spacing · WCAG 2.2 §2.5.8 target size · min text · optical misalignment). Opt-in; skips cleanly
+without Playwright.
 ```bash
 node scripts/runtime/audit_runtime.mjs out/index.html   # after npm run build, in the prototype
 ```
+
+**Step 4.9 — Feedback Loop (test → prototype N+1)** · [`feedback-loop.md`](.claude/skills/designops-pipeline/references/feedback-loop.md) → `validate_test_findings.py`
+
+The loop that makes it iterative. Real test feedback becomes a scored work-list: each finding is
+**de-solutionised** (the underlying problem, not the user's proposed fix), classified **observed vs
+stated** (behaviour > opinion), judged into a **verdict** (`systemic` cross-segment · `segment` ·
+`individual` n=1), and scored `priority_score = severity × reach × confidence`. Fix the top-N in budget
+(→ `target_iteration`), backlog the rest, and stop when new findings dry up. A finding that confirms an
+upstream guess upgrades it **inferred → evidence** — real-user feedback is the one thing the synthetic
+front-end isn't.
 
 ---
 
@@ -256,6 +292,7 @@ Full map: [`references/SKILLS.md`](.claude/skills/designops-pipeline/references/
 |------|---------|
 | `--tor <path>` | TOR file (PDF / DOCX / MD / TXT) |
 | `--tor-text "<text>"` | TOR text directly |
+| `--intent "<text>"` | any product intent (PRD / one-line idea / redesign / notes) — intake generalises it → `brief.json` |
 | `--ds <path>` | looloo design-system **source** checkout, read for inventory/token-contract only (default: `../looloo-design-system`) |
 | `--brief <path>` | Reuse an existing `brief.json`, skipping steps 1+2 |
 | `--out <dir>` | Output directory (default: `./tor-output`) |
@@ -281,17 +318,20 @@ Designops-project-test/
 │   ├── commands/generate-prototype.md
 │   ├── scripts/
 │   │   ├── run_pipeline.sh               #    runner — chains every step
-│   │   ├── validate_{brief,intelligence,flows,screens,aesthetic}.py
+│   │   ├── validate_{brief,research,interviews,competitive,intelligence,scenario_edges}.py
+│   │   ├── validate_{aesthetic,flows,screens,edgecases,usability,test_findings}.py
 │   │   ├── audit_prototype.py            #    Step 4.7 gate (11: token·WCAG·copy·contracts·font·theme·directive·screen·edge·fontfid·axis)
 │   │   ├── lint_{hardcodes,component_contracts,font_imports,theme_fidelity,…}.py
-│   │   └── selftest.sh                   #    142/142 regression guard
+│   │   └── selftest.sh                   #    161/161 regression guard
 │   └── references/
 │       ├── aesthetics/                   #    🎨 138-brand library + taste + contrast.py
 │       ├── tokens/                       #    DTCG token foundation + validators (brandkit)
 │       ├── ux-writing/                   #    voice-tone + check_no_emoji.py
 │       ├── storybook/                    #    opt-in QA template (Step 4.8)
 │       ├── design-review.md · critique-framework.md · audit-checklist.md
-│       ├── intelligence-layer.md · poc-patterns.md · shadcn-prototype.md
+│       ├── intake-layer.md · user-research-layer.md · interview-layer.md
+│       ├── intelligence-layer.md · scenario-edge-layer.md · feedback-loop.md
+│       ├── image-sourcing.md · poc-patterns.md · shadcn-prototype.md
 │       ├── image-to-code.md · brandkit.md · migrate-design-system.md
 │       ├── performance.md · governance.md · mobile-usability.md · SKILLS.md
 │       └── sample-tor.md
@@ -307,14 +347,16 @@ Designops-project-test/
 
 | File | Audience | Step |
 |------|----------|------|
-| `brief.md` · `brief.json` | Designer/PM · AI (facts) | 1+2 |
-| `intelligence.json` | AI (design_directives) | 2.5 |
+| `brief.md` · `brief.json` | Designer/PM · AI (facts) | 1.0 + 1+2 |
+| `research.json` · `interviews.json` · `competitive.json` | AI (evidence/hypotheses) | 2.3 / 2.3b / 2.4 |
+| `intelligence.json` · `scenario-edges.json` | AI (design_directives · missing flows) | 2.5 / 2.5b |
 | `aesthetic.json` · `brand.config.json` | AI (visual direction) · theme | 2.6 |
 | `flows.json` | AI (refined flows) | 3 |
 | `screen-inventory.json` · `design-first-draft.md` | AI (build manifest) · Designer | 3.5 |
 | `prototype/` | Dev (Next.js app) | 4 |
 | `prototype/docs/critique.md` · `audit-report.md` | Designer/Dev · QA/Lead | 4.6 / 4.7 |
-| `prototype/docs/poc-handoff.md` | Dev handoff | 6 |
+| `usability.json` · `test-findings.json` | QA · the next iteration | 4.8 / 4.9 |
+| `prototype/docs/poc-handoff.md` | Dev handoff | 4 |
 
 ---
 
@@ -344,14 +386,16 @@ Designops-project-test/
 ## 🧪 Tests
 
 ```bash
-bash .claude/skills/designops-pipeline/scripts/selftest.sh        # 142/142, runs on macOS stock bash 3.2
+bash .claude/skills/designops-pipeline/scripts/selftest.sh        # 161/161, runs on macOS stock bash 3.2
 ```
 
 Covers bash-3.2 compatibility, every validator (valid passes / invalid fails), the full 11-gate audit
 (fake brand, low contrast, hardcode, emoji, neutral-theme regression, missing safeguard, unbuilt Must
-screen, unhandled edge case, un-applied font/axis all blocked), feature/scoring traceability, the
-import-only setup, and the DTCG token gates.
-**Run it after editing any script** in `.claude/skills/designops-pipeline/scripts/`.
+screen, unhandled edge case, un-applied font/axis all blocked), the Discover/Define honesty gates
+(fabricated evidence, non-simulated interview, uncovered persona, high-impact opportunity without a
+research question), the scenario-edge severity floors, intake confidence floor, typography weight-emphasis,
+image provenance, the feedback-loop scoring math, feature/scoring traceability, the import-only setup, and
+the DTCG token gates. **Run it after editing any script** in `.claude/skills/designops-pipeline/scripts/`.
 
 ---
 
