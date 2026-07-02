@@ -393,9 +393,9 @@ else
   bad "DTCG token kit not vendored"
 fi
 
-# ── T12. UX layers — User Research / Competitive / Usability honesty gates ────
-echo "[T12] UX layers (2.3 research · 2.4 competitive · 4.8 usability)"
-[ -f "$REFS/user-research-layer.md" ] && [ -f "$REFS/competitive-analysis-layer.md" ] && [ -f "$REFS/usability-test-layer.md" ] && ok "UX layer references present" || bad "UX layer references missing"
+# ── T12. UX layers — User Research / Interview / Competitive / Usability honesty gates ────
+echo "[T12] UX layers (2.3 research · 2.3b interview · 2.4 competitive · 4.8 usability)"
+[ -f "$REFS/user-research-layer.md" ] && [ -f "$REFS/interview-layer.md" ] && [ -f "$REFS/competitive-analysis-layer.md" ] && [ -f "$REFS/usability-test-layer.md" ] && ok "UX layer references present" || bad "UX layer references missing"
 
 # research — valid (inferred mode) passes; fabricated evidence fails
 cat > "$TMP/research.json" <<'JSON'
@@ -407,6 +407,22 @@ JSON
 python3 "$SCRIPTS_DIR/validate_research.py" "$TMP/research.json" >/dev/null 2>&1 && ok "valid research (inferred) → exit 0" || bad "valid research should pass"
 python3 -c "import json;d=json.load(open('$TMP/research.json'));d['personas'][0]['source']='evidence';d['personas'][0]['evidence']=['x:ghost'];json.dump(d,open('$TMP/research_bad.json','w'))"
 python3 "$SCRIPTS_DIR/validate_research.py" "$TMP/research_bad.json" >/dev/null 2>&1 && bad "fabricated evidence should fail" || ok "evidence not in inputs_provided → exit 1 (BLOCKED)"
+
+# research opportunity — high-impact + inferred requires a research_question
+python3 -c "import json;d=json.load(open('$TMP/research.json'));d['opportunities']=[{'id':'OPP01','persona_ref':'P01','pain_ref':[],'statement':'hmw','impact':'high','effort':'med','source':'inferred','evidence':[],'confidence':'medium'}];json.dump(d,open('$TMP/research_opp.json','w'))"
+python3 "$SCRIPTS_DIR/validate_research.py" "$TMP/research_opp.json" >/dev/null 2>&1 && bad "high-impact inferred opp w/o research_question should fail" || ok "high-impact inferred opportunity needs research_question → exit 1 (BLOCKED)"
+
+# interview — simulated layer: valid passes; claiming non-simulated fails; primary persona uncovered fails
+cat > "$TMP/interviews.json" <<'JSON'
+{ "meta": { "schema_version": "1.0", "evidence_mode": "inferred", "not_real_user_data": true, "simulated": true, "gate_rounds_used": 1, "overall_confidence": "medium", "limitations": ["role-played, not real"] },
+  "interview_scripts": [{ "persona_ref": "P01", "questions": [{ "id": "Q01", "theme": "pain", "scope": "universal", "text": "q" }, { "id": "Q02", "theme": "behavior", "scope": "universal", "text": "q" }] }],
+  "simulated_responses": [{ "persona_ref": "P01", "question_ref": "Q01", "answer": "a", "quote": "q", "traces_to": ["P01"], "simulated": true }],
+  "affinity_map": [{ "id": "AF01", "theme": "t", "insight": "i", "supporting_quotes": ["Q01", "Q02"], "personas_covered": ["P01"], "pain_ref": [], "confidence": "medium" }],
+  "gate_log": [{ "round": 1, "verdict": "pass", "reason": "ok" }] }
+JSON
+python3 "$SCRIPTS_DIR/validate_interviews.py" "$TMP/interviews.json" "$TMP/research.json" >/dev/null 2>&1 && ok "valid interview (simulated, covers P01) → exit 0" || bad "valid interview should pass"
+python3 -c "import json;d=json.load(open('$TMP/interviews.json'));d['meta']['simulated']=False;json.dump(d,open('$TMP/interviews_bad.json','w'))"
+python3 "$SCRIPTS_DIR/validate_interviews.py" "$TMP/interviews_bad.json" "$TMP/research.json" >/dev/null 2>&1 && bad "non-simulated interview should fail" || ok "meta.simulated must be true → exit 1 (BLOCKED)"
 
 # competitive — valid passes; convention 'break' without reason fails
 cat > "$TMP/competitive.json" <<'JSON'

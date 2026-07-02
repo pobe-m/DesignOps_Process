@@ -54,9 +54,29 @@
       "tied_to": "A01", "method": "usability_test", "priority": "important"
     }
   ],
+  "opportunities": [
+    {
+      "id": "OPP01", "persona_ref": "P01", "pain_ref": ["PP01"],
+      "statement": "How might we let operators find a reservation by any guest attribute (name, phone, email), not just the exact reference?",
+      "impact": "high", "effort": "med",
+      "source": "inferred", "evidence": [], "confidence": "medium", "research_question": "RQ01"
+    }
+  ],
+  "current_state_journey": [
+    {
+      "persona_ref": "P01", "mode": "existing_product",
+      "phases": [
+        { "name": "Greet guest", "actions": ["welcome", "ask for booking"], "pains_ref": [], "emotion": 1, "opportunity_ref": [] },
+        { "name": "Ask for reference", "actions": ["request booking ref"], "pains_ref": ["PP01"], "emotion": 0, "opportunity_ref": [] },
+        { "name": "Guest digs for email", "actions": ["wait while guest searches inbox"], "pains_ref": ["PP01"], "emotion": -2, "opportunity_ref": ["OPP01"] },
+        { "name": "Find & check in", "actions": ["locate reservation", "confirm"], "pains_ref": [], "emotion": 1, "opportunity_ref": [] }
+      ]
+    }
+  ],
   "feeds_intelligence": {
     "user_types_hint": ["operator (primary)", "approver (secondary)"],
     "user_goals_hint": ["fast name-based lookup", "accountable override"],
-    "error_tolerance_hint": "medium — overrides need an audit trail"
+    "error_tolerance_hint": "medium — overrides need an audit trail",
+    "opportunity_hints": ["OPP01"]
   }
 }

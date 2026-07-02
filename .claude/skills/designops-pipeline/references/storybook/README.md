@@ -1,4 +1,4 @@
-# Storybook QA layer (Step 4.8 — optional)
+# Storybook QA layer (Step 4.7c — optional)
 
 An **opt-in** component-preview + automated-a11y layer for the POC prototype. It is NOT enabled
 by default: Storybook + Playwright + Vitest are heavy devDeps, and the pipeline keeps the vendored

@@ -19,11 +19,14 @@ description: >
   Step 4 builds a POC prototype from a ready-made component library + mock data, Step 4.6 runs a
   scored critique (6 weighted dimensions + Nielsen + anti-slop + a separate judge pass), Step 4.7 is a runnable audit gate
   (audit_prototype.py — 11 gates: tokens + WCAG contrast in light/dark + no-emoji + component contracts + no remote-font @import + theme fidelity + directive fidelity + screen coverage + edge-case coverage + font fidelity + axis fidelity) before handoff.
-  UX layers feed the pipeline: Step 2.3 (User Research → research.json: personas/JTBD/pains) and
-  Step 2.4 (Competitive Analysis → competitive.json) supply evidence to Step 2.5; Step 4.8
-  (Usability Test → usability.json: heuristic + automated + simulated persona walkthrough) runs on
-  the built prototype. All three are HYBRID (infer-then-override) and honesty-gated — nothing is
-  marked evidence without a declared input, and usability never claims a real-user test.
+  UX layers feed the pipeline: Step 2.3 (User Research → research.json: personas/JTBD/pains),
+  Step 2.3b (Interview + Affinity → interviews.json: a simulated persona role-play + affinity map,
+  quality-gated against circular answers) and Step 2.4 (Competitive Analysis → competitive.json) supply
+  evidence to Step 2.5; Step 4.8 (Usability Test → usability.json: heuristic + automated + simulated
+  persona walkthrough) runs on the built prototype. All are HYBRID (infer-then-override) and honesty-gated
+  — nothing is marked evidence without a declared input, and neither the interview nor the usability layer
+  claims a real-user test. Step 2.5 also enforces a coverage invariant: every user_type traces back to a
+  2.3 persona (persona_ref), so no audience is invented or dropped between research and intelligence.
 ---
 
 # designops-pipeline
@@ -44,12 +47,14 @@ TOR (PDF / DOCX / Notion / GDocs)
   │  (humans)   │     │  (AI consumes)   │
   └─────────────┘     └────────┬─────────┘
                                │  validate_brief.py
-                               ▼  Step 2.3 User Research · Step 2.4 Competitive (UX, hybrid)
+                               ▼  Step 2.3 User Research · 2.3b Interview+Affinity · 2.4 Competitive (UX, hybrid)
                     ┌─────────────────────────────┐
-                    │  research.json              │  personas / JTBD / pains
-                    │  competitive.json           │  ← validate_research.py / validate_competitive.py
+                    │  research.json              │  personas / JTBD / pains / journey / opportunities
+                    │  interviews.json            │  simulated role-play → affinity map (→ pains)
+                    │  competitive.json           │  ← validate_research / _interviews / _competitive
                     └──────────┬──────────────────┘     (honesty-gated: no fabricated evidence)
                                ▼  Step 2.5  Product Intelligence Layer (consumes UX evidence)
+                               │            user_type → persona coverage enforced
                     ┌─────────────────────┐
                     │  intelligence.json  │  10 dims → design_directives
                     └──────────┬──────────┘
@@ -1020,9 +1025,11 @@ fails contrast — none of which the static gate can see.
 
 ---
 
-## Step 4.8 — Storybook QA layer (optional)
+## Step 4.7c — Storybook QA layer (optional)
 
 > Opt-in. Off by default (Storybook + Playwright + Vitest are heavy; default prototype builds stay fast).
+> Numbered **4.7c** (an automated audit rung after 4.7b runtime audit) — distinct from the human-facing
+> **Step 4.8 Usability Test**, which runs later on the built prototype.
 > Template + exact enable steps: `references/storybook/README.md`. Lives in the **built prototype** (`output/prototype/`), never in the imported `@npsin-oreo/design-system` package.
 
 Adds a component explorer + **`@storybook/addon-a11y`** (axe-core on every rendered story — a runtime

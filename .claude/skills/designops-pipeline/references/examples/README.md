@@ -5,7 +5,8 @@ generate against.
 
 | File | Layer / Step | evidence_mode shown |
 |------|--------------|---------------------|
-| `research.example.json` | User Research · 2.3 | **hybrid** — 2 personas/JTBD are `evidence` (cite `inputs_provided`), the rest `inferred` |
+| `research.example.json` | User Research · 2.3 | **hybrid** — 2 personas/JTBD are `evidence` (cite `inputs_provided`), the rest `inferred`; includes a conditional `current_state_journey` (mode `existing_product`) + an `opportunities` entry (high-impact + inferred → carries a `research_question`) |
+| `interviews.example.json` | Interview + Affinity · 2.3b | **simulated** — `not_real_user_data:true`, every response `simulated:true` + `traces_to`, affinity insights ≤ medium confidence, `gate_log` shows a circular answer re-probed then passing |
 | `competitive.example.json` | Competitive Analysis · 2.4 | **inferred** — no competitor data given → market hypotheses; one `convention:"break"` with a reason |
 | `usability.example.json` | Usability Test · 4.8 | simulated — `not_real_user_testing:true`, automated finding cites an axe rule, persona walkthrough `simulated:true` |
 
@@ -14,6 +15,7 @@ Validate:
 ```bash
 S=.claude/skills/designops-pipeline/scripts ; E=.claude/skills/designops-pipeline/references/examples
 python3 $S/validate_research.py    $E/research.example.json
+python3 $S/validate_interviews.py  $E/interviews.example.json $E/research.example.json
 python3 $S/validate_competitive.py $E/competitive.example.json
 python3 $S/validate_usability.py   $E/usability.example.json $E/research.example.json
 ```

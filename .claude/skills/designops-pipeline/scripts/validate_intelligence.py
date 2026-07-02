@@ -2,9 +2,13 @@
 """
 validate_intelligence.py — gate for the Product Intelligence Layer (Step 2.5).
 
-Usage: validate_intelligence.py <path/to/intelligence.json> [path/to/brief.json]
+Usage: validate_intelligence.py <path/to/intelligence.json> [path/to/brief.json] [path/to/research.json]
 Exit 0 = valid, Exit 1 = invalid (with errors). Warnings + confidence gating are
 printed but do not fail the gate.
+
+When research.json is supplied, the user_type → persona coverage invariant is enforced:
+every user_type must carry a persona_ref that resolves to a real research persona id, and
+every primary persona must be covered by ≥1 user_type (no orphan segments, no dropped audience).
 
 Validates 4 layers: (A) structural enums/bands/ids, (B) referential integrity into
 brief.json ids, (C) cross-dimension invariants, plus confidence gating + contradiction
@@ -57,7 +61,7 @@ def _enum(val, allowed, path, errors):
         errors.append(f"{path} must be one of {sorted(allowed)} (got: {val!r})")
 
 
-def validate(intel_path, brief_path=None):
+def validate(intel_path, brief_path=None, research_path=None):
     errors, warnings = [], []
 
     try:
@@ -75,6 +79,23 @@ def validate(intel_path, brief_path=None):
                 brief = json.load(f)
         except Exception:
             warnings.append(f"could not read brief.json at {brief_path} — skipping referential checks")
+
+    # research.json personas — enables the user_type → persona coverage invariant.
+    # Absent → coverage is not enforced (research is an optional upstream layer).
+    persona_ids, primary_persona_ids = None, set()
+    if research_path:
+        try:
+            with open(research_path) as f:
+                research = json.load(f)
+            persona_ids = set()
+            for p in research.get("personas", []):
+                pid = p.get("id")
+                if pid:
+                    persona_ids.add(pid)
+                    if p.get("primary") is True:
+                        primary_persona_ids.add(pid)
+        except Exception:
+            warnings.append(f"could not read research.json at {research_path} — skipping persona coverage checks")
 
     for k in REQUIRED_TOP_KEYS:
         if k not in d:
@@ -94,6 +115,7 @@ def validate(intel_path, brief_path=None):
 
     # ── A. user_types (+ nested expertise) ──────────────────────────────────────
     ut_ids, novice_domains, has_power_novice = set(), [], False
+    covered_persona_ids = set()  # personas referenced by a user_type (for reverse coverage)
     uts = d["user_types"]
     if not isinstance(uts, list) or not uts:
         errors.append("user_types must have at least 1 entry")
@@ -112,6 +134,17 @@ def validate(intel_path, brief_path=None):
             _enum(u.get("relationship"), RELATIONSHIP, f"user_types[{i}].relationship", errors)
             if not u.get("evidence"):
                 errors.append(f"user_types[{i}].evidence must not be empty")
+            # persona coverage: only enforced when research.json personas were loaded
+            if persona_ids is not None:
+                pref = u.get("persona_ref")
+                if not pref:
+                    errors.append(f"user_types[{i}] ({uid}) has no persona_ref — every user type must "
+                                  "trace back to a research.json persona when research exists")
+                elif pref not in persona_ids:
+                    errors.append(f"user_types[{i}].persona_ref '{pref}' does not resolve to any "
+                                  "persona id in research.json")
+                else:
+                    covered_persona_ids.add(pref)
             ex = u.get("expertise") or {}
             _enum(ex.get("domain"), EXPERTISE, f"user_types[{i}].expertise.domain", errors)
             _enum(ex.get("tool"), EXPERTISE, f"user_types[{i}].expertise.tool", errors)
@@ -121,6 +154,12 @@ def validate(intel_path, brief_path=None):
             novice_domains.append(ex.get("domain") == "novice")
             if ex.get("usage_frequency") == "power" and ex.get("domain") == "novice":
                 has_power_novice = True
+
+    # reverse coverage: every primary persona must become ≥1 user_type
+    if persona_ids is not None:
+        for pid in sorted(primary_persona_ids - covered_persona_ids):
+            errors.append(f"primary persona '{pid}' from research.json is not referenced by any "
+                          "user_type.persona_ref — a primary audience was dropped between 2.3 and 2.5")
 
     # ── user_goals ──────────────────────────────────────────────────────────────
     goal_ids = set()
@@ -324,12 +363,13 @@ def validate(intel_path, brief_path=None):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: validate_intelligence.py <intelligence.json> [brief.json]", file=sys.stderr)
+        print("Usage: validate_intelligence.py <intelligence.json> [brief.json] [research.json]", file=sys.stderr)
         sys.exit(1)
 
     intel_path = sys.argv[1]
     brief_path = sys.argv[2] if len(sys.argv) > 2 else None
-    errors, warnings = validate(intel_path, brief_path)
+    research_path = sys.argv[3] if len(sys.argv) > 3 else None
+    errors, warnings = validate(intel_path, brief_path, research_path)
 
     if errors:
         print(f"[validate_intelligence] ✗ Invalid — {len(errors)} error(s):", file=sys.stderr)

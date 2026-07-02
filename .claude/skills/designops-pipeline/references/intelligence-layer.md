@@ -18,7 +18,7 @@ consume — so UI decisions come from *what the product needs*, not from a featu
 
 | # | Category | Purpose | Generation method | Validation |
 |---|----------|---------|-------------------|------------|
-| 1 | **User Types** | distinct roles → multi-surface IA, role views | extract `target_users` + **infer implicit roles from verbs/permissions** in features | ≥1 `primary`; ids unique; evidence required |
+| 1 | **User Types** | distinct roles → multi-surface IA, role views | extract `target_users` + **infer implicit roles from verbs/permissions** in features | ≥1 `primary`; ids unique; evidence required; **`persona_ref` resolves to a 2.3 persona when research.json exists** |
 | 2 | **User Expertise** (per type) | guidance vs speed; onboarding vs density | infer `domain` + `tool` axes from role/training/frequency | enums; `power`+`novice` → warn |
 | 3 | **User Goals** | outcomes (the why), not features | from objective + pain_points + flows, as JTBD outcome statements | outcome (no UI nouns); `user_type_ref` valid; ≥1 `must` |
 | 4 | **Core Tasks** | repeatable units that achieve goals | decompose goals+flows into verb-object tasks | verb-object; `goal_ref`+`user_type_ref` valid |
@@ -40,6 +40,7 @@ consume — so UI decisions come from *what the product needs*, not from a featu
 
   "user_types": [{ "id": "UT01", "name": "", "role_category": "operator|admin|end_user|approver|auditor|system",
     "relationship": "primary|secondary|occasional", "primary_surface": "",
+    "persona_ref": "P01",   // trace back to a research.json persona id — required when research.json exists (see coverage invariant)
     "expertise": { "domain": "novice|intermediate|expert", "tool": "novice|intermediate|expert",
                    "usage_frequency": "first_time|occasional|daily|power", "training_provided": "yes|no|unknown" },
     "source": "stated|inferred", "evidence": ["personas[0]","F03"], "confidence": "high|medium|low" }],
@@ -102,6 +103,8 @@ consume — so UI decisions come from *what the product needs*, not from a featu
 | sensitive data in brief (health/financial/biometric/minor) ⇒ ≥1 `compliance_requirements` |
 | `compliance.mandatory = true` ⇒ non-empty `ui_implications` |
 | every goal/task `*_ref` resolves; every `flow_ref` → `brief.user_flows` |
+| **when `research.json` is provided ⇒ every `user_type` carries a `persona_ref` that resolves to a real persona id in research.json** (2.5 user type traces back to a 2.3 persona — no orphan segments invented at the intelligence layer) |
+| **when `research.json` is provided ⇒ every `primary` persona is covered by ≥1 `user_type.persona_ref`** (reverse coverage — a primary persona that never becomes a user type is a dropped audience) |
 
 **Confidence gating:** if `meta.overall_confidence = low`, the validator emits
 `constrain_downstream=true` → Step 3/4 should produce wireframe-level output + force a human gate
@@ -128,7 +131,7 @@ Rules:
    least the central `trade_offs` entry (decision / chose / over / because) so the strategy is auditable,
    not just emitted — this is what makes the pipeline a reasoning system, not a generator.
 
-Process: user_types (+inferred roles) → expertise → goals → tasks → workflow_complexity + data_density →
+Process: user_types (+inferred roles; **set `persona_ref` to the research.json persona each type derives from — every primary persona must become ≥1 user type**) → expertise → goals → tasks → workflow_complexity + data_density →
 error_tolerance + decision_criticality (together) → accessibility + compliance → design_directives rollup →
 open_questions for every low-confidence inference.
 ```

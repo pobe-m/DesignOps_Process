@@ -51,13 +51,37 @@ of three modes, declared in `meta.evidence_mode`:
   "research_questions": [{ "id": "RQ01", "question": "", "tied_to": "A01",
     "method": "interview|survey|analytics|usability_test", "priority": "blocker|important|nice_to_know" }],
 
-  "feeds_intelligence": { "user_types_hint": [], "user_goals_hint": [], "error_tolerance_hint": "" }
+  // OPTIONAL — the as-is experience, sequenced. Produce ONLY when the product is flow-shaped
+  // (a redesign, or a multi-step task users already do today by hand / with a workaround).
+  // `mode` is honest about what the journey maps: an existing product, a manual workaround, or none.
+  // Non-flow tools (a dashboard, a reference app) skip this — affinity/pains cover them.
+  "current_state_journey": [{ "persona_ref": "P01", "mode": "existing_product|workaround|none",
+    "phases": [{ "name": "", "actions": [], "pains_ref": ["PP01"],
+                 "emotion": 0,                      // -2..+2 emotional low/high at this phase
+                 "opportunity_ref": ["OPP01"] }] }],
+
+  // OPTIONAL — where the as-is breaks becomes a chance to improve. Each ties to the pain it relieves
+  // and (when journey-driven) the phase it sits in. Feeds design_directives via feeds_intelligence.
+  "opportunities": [{ "id": "OPP01", "persona_ref": "P01", "pain_ref": ["PP01"],
+    "statement": "<how might we…>", "impact": "low|med|high", "effort": "low|med|high",
+    "source": "inferred|evidence", "evidence": [], "confidence": "high|medium|low",
+    "research_question": "RQ01" }],   // required when a high-impact opportunity rests on a low-confidence inference
+
+  "feeds_intelligence": { "user_types_hint": [], "user_goals_hint": [], "error_tolerance_hint": "",
+    "opportunity_hints": [] }         // high-impact OPP ids → Step 2.5 may promote to mandatory_flows / features
 }
 ```
 
 `feeds_intelligence` is the **seam** Step 2.5 reads: personas → `user_types`, JTBD → `user_goals`,
-pain points + assumptions → `error_tolerance` / `open_questions`. Evidence-backed hints let the
-intelligence layer raise its own confidence; inferred hints stay hypotheses.
+pain points + assumptions → `error_tolerance` / `open_questions`, **`opportunity_hints` → `design_directives`
+(a high-impact opportunity can become a `mandatory_flow` or a promoted feature)**. Evidence-backed hints
+let the intelligence layer raise its own confidence; inferred hints stay hypotheses.
+
+`current_state_journey` is **conditional, not mandatory** — it earns its place only when the product is
+flow-shaped (a redesign, or a task users already perform via a manual workaround). It is the near-free
+re-projection of the same pains along a timeline: it does not add new facts, it *locates* them and turns
+each breakpoint into an `opportunity`. When there is no existing experience or workaround to map
+(`mode: "none"`), don't invent one — omit the journey and let pains/opportunities stand alone.
 
 ---
 
@@ -72,6 +96,11 @@ intelligence layer raise its own confidence; inferred hints stay hypotheses.
 | every `risk_if_wrong == "high"` assumption ⇒ ≥1 `research_questions` with `tied_to` = its id |
 | ≥1 persona with `primary == true`; all ids unique; every `*_ref` resolves |
 | `overall_confidence == "low"` ⇒ emits `constrain_downstream=true` (Step 2.5 treats hints as low-confidence) |
+| `opportunities[]` obey the same honesty rules as every other item (`source`/`confidence`; inferred ≠ high; evidence refs ∈ `inputs_provided`) |
+| every `opportunities[].pain_ref` resolves to a `pain_points` id; `persona_ref` resolves to a persona; `research_question` (when set) resolves to a `research_questions` id |
+| a **high-impact** opportunity that is `source:"inferred"` ⇒ must carry a `research_question` (don't build a big bet on a guess without flagging it for validation) |
+| `current_state_journey[].phases[].emotion` ∈ `[-2, 2]`; every `pains_ref` → a pain id; every `opportunity_ref` → an opportunity id; `persona_ref` resolves |
+| `current_state_journey` present ⇒ `mode ∈ {existing_product, workaround, none}`; `mode == "none"` ⇒ the journey should be omitted, not filled with invention |
 
 ---
 
@@ -87,7 +116,14 @@ INPUT: brief.json (facts) + any provided research inputs. OUTPUT: research.json 
 3. INFERRED CAPS AT MEDIUM. Any inferred item is confidence ≤ medium; every high-risk assumption gets a research_question.
 4. JTBD ARE SITUATIONS, not features ("when I…, I want…, so that…").
 5. Fill feeds_intelligence so Step 2.5 can consume personas/JTBD/pains as evidence.
+6. CURRENT-STATE JOURNEY IS CONDITIONAL. Only map it when the product is flow-shaped and there is an
+   existing experience or a manual workaround to map. It re-projects the pains you already found onto a
+   timeline — it invents no new facts. If there's nothing real to map (mode:"none"), OMIT it.
+7. TURN BREAKPOINTS INTO OPPORTUNITIES. Each journey low / pain becomes ≤1 opportunity tied to its pain_ref;
+   score impact × effort. A high-impact opportunity resting on an inferred guess MUST carry a research_question.
+   Roll high-impact OPP ids into feeds_intelligence.opportunity_hints for Step 2.5.
 
 Process: personas → JTBD (per persona) → pain_points → behavioral_assumptions (+ risk) →
-research_questions (cover every high-risk assumption) → feeds_intelligence rollup.
+research_questions (cover every high-risk assumption) → [if flow-shaped] current_state_journey →
+opportunities (per breakpoint) → feeds_intelligence rollup (incl. opportunity_hints).
 ```

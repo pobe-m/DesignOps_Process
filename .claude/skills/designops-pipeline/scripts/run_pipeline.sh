@@ -227,6 +227,38 @@ if [[ -f "$RESEARCH_JSON" ]]; then
   log "✓ research.json valid"
 fi
 
+# ── step 2.3b: personas → simulated interview + affinity ──────────────────────
+# The AI role-plays each persona through a tailored interview; a quality gate rejects circular
+# (hall-of-mirrors) answers; the affinity map feeds pains/opportunities back into research.
+# SIMULATED, honesty-gated — never passed off as real user research.
+INTERVIEWS_JSON="$OUT_DIR/interviews.json"
+if [[ -f "$RESEARCH_JSON" && ! -f "$INTERVIEWS_JSON" ]]; then
+  step "Step 2.3b — Interview + Affinity Layer (research → interviews.json)"
+  PROMPT_INTERVIEWS="$OUT_DIR/.prompt_interviews.txt"
+  cat > "$PROMPT_INTERVIEWS" << PROMPT
+Read "$BRIEF_JSON" and "$RESEARCH_JSON" (personas), then produce "$INTERVIEWS_JSON" following
+$SKILL_DIR/references/interview-layer.md (the Interview + Affinity Layer).
+
+This is a SIMULATED interview — you role-play each persona; it is NOT real research. Be honest:
+meta.not_real_user_data:true, meta.simulated:true, every response simulated:true, overall_confidence
+<= medium, limitations non-empty. Write 6-10 open, unbiased questions per persona; answer AS the persona,
+grounded in their fields + the brief (traces_to must cite that grounding — never invent a fact).
+Run the quality gate: any circular answer (a paraphrase of the persona) or one that traces to nothing →
+rewrite the question sharper / from another angle and re-answer (log rounds in gate_log, cap 3). Cluster
+the quotes into an affinity_map (each insight cites >=2 distinct questions + the pains it maps to).
+Interview every primary persona. Hand affinity pain_ref/insights back into research.json (pain_points /
+opportunities) as HYPOTHESES to validate later with real users.
+PROMPT
+  _generate "$PROMPT_INTERVIEWS" "Step 2.3b — research → simulated interview + affinity" "$INTERVIEWS_JSON"
+fi
+if [[ -f "$INTERVIEWS_JSON" ]]; then
+  step "Validating interviews.json"
+  python3 "$SKILL_DIR/scripts/validate_interviews.py" "$INTERVIEWS_JSON" "$RESEARCH_JSON" || {
+    err "interviews.json validation failed — fix it first, or re-run Step 2.3b"
+  }
+  log "✓ interviews.json valid"
+fi
+
 # ── step 2.4: brief + research → competitive analysis (UX) ────────────────────
 COMPETITIVE_JSON="$OUT_DIR/competitive.json"
 if [[ ! -f "$COMPETITIVE_JSON" ]]; then
@@ -278,16 +310,20 @@ by at least one task/goal — otherwise the contractual scope was dropped and th
 
 If "$RESEARCH_JSON" exists, use feeds_intelligence as evidence: personas → user_types,
 jobs_to_be_done → user_goals, pain_points/behavioral_assumptions → error_tolerance/open_questions
-(evidence-backed research raises confidence; inferred research stays a hypothesis). If
+(evidence-backed research raises confidence; inferred research stays a hypothesis). Set each
+user_type.persona_ref to the research persona it derives from — every primary persona must become
+>=1 user_type (the gate enforces this coverage when research.json is present). If
 "$COMPETITIVE_JSON" exists, use its feeds for data_density + expected patterns.
 PROMPT
   _generate "$PROMPT_INTEL" "Step 2.5 — brief → product intelligence" "$INTEL_JSON"
 fi
 
-# validate intelligence.json (gate)
+# validate intelligence.json (gate) — pass research.json (when present) so the
+# user_type → persona coverage invariant is enforced (every user type traces to a persona).
 if [[ -f "$INTEL_JSON" ]]; then
   step "Validating intelligence.json"
-  python3 "$SKILL_DIR/scripts/validate_intelligence.py" "$INTEL_JSON" "$BRIEF_JSON" || {
+  RESEARCH_ARG=""; [[ -f "$RESEARCH_JSON" ]] && RESEARCH_ARG="$RESEARCH_JSON"
+  python3 "$SKILL_DIR/scripts/validate_intelligence.py" "$INTEL_JSON" "$BRIEF_JSON" ${RESEARCH_ARG:+"$RESEARCH_ARG"} || {
     err "intelligence.json validation failed — fix it first, or re-run Step 2.5"
   }
   log "✓ intelligence.json valid"

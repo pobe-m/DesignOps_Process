@@ -1,0 +1,67 @@
+{
+  "meta": {
+    "source_brief": "output/brief.json",
+    "source_research": "output/research.json",
+    "generated_at": "2026-06-18T00:00:00Z",
+    "schema_version": "1.0",
+    "evidence_mode": "inferred",
+    "not_real_user_data": true,
+    "simulated": true,
+    "gate_rounds_used": 2,
+    "overall_confidence": "medium",
+    "limitations": [
+      "no real participants — every answer is role-played from the persona + brief, so no new fact is discovered",
+      "insights are hypotheses to validate with real operators, not findings"
+    ],
+    "human_reviewed": false
+  },
+  "interview_scripts": [
+    {
+      "persona_ref": "P01",
+      "questions": [
+        { "id": "Q01", "theme": "motivation", "scope": "universal", "text": "Walk me through the last time a guest arrived at your desk — what were you trying to get done?" },
+        { "id": "Q02", "theme": "behavior", "scope": "role_specific", "text": "When someone shows up without a booking reference, what do you actually do first?" },
+        { "id": "Q03", "theme": "pain", "scope": "universal", "text": "Tell me about a check-in that went badly recently — what happened?" },
+        { "id": "Q04", "theme": "pain", "scope": "role_specific", "text": "What slows the queue down the most on a busy morning?" },
+        { "id": "Q05", "theme": "tools", "scope": "universal", "text": "Which parts of the current system do you avoid or work around?" },
+        { "id": "Q06", "theme": "goal", "scope": "universal", "text": "At the end of a shift, what makes you feel it went well?" }
+      ]
+    },
+    {
+      "persona_ref": "P02",
+      "questions": [
+        { "id": "Q07", "theme": "behavior", "scope": "role_specific", "text": "When an operator escalates a blocked action to you, what do you need to see before you decide?" },
+        { "id": "Q08", "theme": "pain", "scope": "role_specific", "text": "Describe a time you couldn't tell why an override had happened — what did that cost you?" },
+        { "id": "Q09", "theme": "motivation", "scope": "universal", "text": "What does a good day look like from the back office?" },
+        { "id": "Q10", "theme": "tools", "scope": "role_specific", "text": "How do you track what the front desk changed during the day?" },
+        { "id": "Q11", "theme": "goal", "scope": "universal", "text": "What would let you trust the desk to handle exceptions without you?" },
+        { "id": "Q12", "theme": "pain", "scope": "universal", "text": "What information do you wish you had that you don't today?" }
+      ]
+    }
+  ],
+  "simulated_responses": [
+    { "persona_ref": "P01", "question_ref": "Q02", "answer": "I ask for their name and try to find them that way, but the system only really searches by the booking code, so I end up asking them to dig through their email for it.", "quote": "The system only searches by booking code, so I make the guest find the email.", "traces_to": ["personas[0].frustrations", "PP01", "JTBD01"], "simulated": true },
+    { "persona_ref": "P01", "question_ref": "Q04", "answer": "Honestly it's the people without a reference. One of those and the whole line stops while they scroll their phone.", "quote": "One guest without a reference and the whole line stops.", "traces_to": ["PP01", "F03"], "simulated": true },
+    { "persona_ref": "P02", "question_ref": "Q08", "answer": "An operator overrode a blocked rate and I only found out from the nightly report — there was no note on why, so I couldn't back them up.", "quote": "There was no note on why the override happened, so I couldn't back them up.", "traces_to": ["personas[1].frustrations", "JTBD02"], "simulated": true }
+  ],
+  "affinity_map": [
+    {
+      "id": "AF01", "theme": "Lookup friction",
+      "insight": "Reference-only search offloads the work onto the guest and stalls the queue — operators want to find people by any attribute.",
+      "supporting_quotes": ["Q02", "Q04"], "personas_covered": ["P01"],
+      "pain_ref": ["PP01"], "confidence": "medium",
+      "research_question": "On arrival, do operators actually reach for name search before reference search?"
+    },
+    {
+      "id": "AF02", "theme": "Accountability gaps",
+      "insight": "Overrides without a captured reason erode manager trust and can't be defended after the fact.",
+      "supporting_quotes": ["Q07", "Q08"], "personas_covered": ["P02"],
+      "pain_ref": [], "confidence": "low",
+      "research_question": "Do managers need a reason captured at override time, or is a nightly summary enough?"
+    }
+  ],
+  "gate_log": [
+    { "round": 1, "verdict": "reprobe", "reason": "first answers paraphrased the persona's frustration verbatim (circular) — rewrote Q02/Q04 to ask for a concrete recent incident" },
+    { "round": 2, "verdict": "pass", "reason": "answers now cite specific behaviour + trace to PP01/JTBD; two distinct quotes support each theme" }
+  ]
+}
