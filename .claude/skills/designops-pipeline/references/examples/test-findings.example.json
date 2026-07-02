@@ -1,0 +1,51 @@
+{
+  "meta": {
+    "iteration": 1,
+    "prototype_ref": "output/prototype@v1",
+    "generated_at": "2026-06-20T00:00:00Z",
+    "schema_version": "1.0",
+    "test_method": "real_user",
+    "convergence": { "new_this_round": 3, "dry_rounds": 0 }
+  },
+  "findings": [
+    {
+      "id": "FD01",
+      "raw": "Two operators at different desks both said they couldn't find a guest by name during the morning rush and had to ask for the booking code.",
+      "type": "observed",
+      "problem_statement": "Operators can't locate a reservation by guest name, so the queue stalls while the guest digs for the booking code.",
+      "maps_to": "PP01",
+      "severity": 2, "reach": 2, "confidence": "high",
+      "priority_score": 12,
+      "verdict": "systemic",
+      "decision": "fix_now",
+      "target_iteration": 2,
+      "participant_ref": "R01,R04"
+    },
+    {
+      "id": "FD02",
+      "raw": "A duty manager wished the override screen showed the operator's reason inline.",
+      "type": "stated",
+      "problem_statement": "Managers approve overrides without seeing the reason, so they can't judge or defend the decision.",
+      "maps_to": null,
+      "severity": 1, "reach": 1, "confidence": "medium",
+      "priority_score": 2,
+      "verdict": "segment",
+      "decision": "backlog",
+      "target_iteration": null,
+      "participant_ref": "R02"
+    },
+    {
+      "id": "FD03",
+      "raw": "One operator said they'd prefer the primary button to be green instead of indigo.",
+      "type": "stated",
+      "problem_statement": "One operator dislikes the primary button colour.",
+      "maps_to": null,
+      "severity": 0, "reach": 1, "confidence": "low",
+      "priority_score": 0,
+      "verdict": "individual",
+      "decision": "wont_fix",
+      "target_iteration": null,
+      "participant_ref": "R03"
+    }
+  ]
+}

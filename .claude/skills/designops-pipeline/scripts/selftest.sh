@@ -68,6 +68,13 @@ python3 "$VALIDATE" "$TMP/no_features.json" >/dev/null 2>&1 && bad "missing core
 # bad priority
 python3 -c "import json;d=json.load(open('$TMP/valid.json'));d['core_features'][0]['priority']='Urgent';json.dump(d,open('$TMP/bad_prio.json','w'))"
 python3 "$VALIDATE" "$TMP/bad_prio.json" >/dev/null 2>&1 && bad "bad priority should fail" || ok "invalid priority → exit 1"
+# intake (Step 1.0): valid input_type passes; bad enum fails; thin idea claiming high confidence fails
+python3 -c "import json;d=json.load(open('$TMP/valid.json'));d['meta']['input_type']='idea';d['meta']['tor_confidence']='low';json.dump(d,open('$TMP/intake_ok.json','w'))"
+python3 "$VALIDATE" "$TMP/intake_ok.json" >/dev/null 2>&1 && ok "intake input_type=idea + low confidence → exit 0" || bad "valid intake brief should pass"
+python3 -c "import json;d=json.load(open('$TMP/valid.json'));d['meta']['input_type']='napkin';json.dump(d,open('$TMP/intake_bad.json','w'))"
+python3 "$VALIDATE" "$TMP/intake_bad.json" >/dev/null 2>&1 && bad "bad input_type should fail" || ok "invalid input_type enum → exit 1"
+python3 -c "import json;d=json.load(open('$TMP/valid.json'));d['meta']['input_type']='idea';d['meta']['tor_confidence']='high';json.dump(d,open('$TMP/intake_lie.json','w'))"
+python3 "$VALIDATE" "$TMP/intake_lie.json" >/dev/null 2>&1 && bad "thin idea + high confidence should fail" || ok "idea input requires low confidence floor → exit 1"
 
 # ── T4. agent-driven prep mode: stages prompts, no recursion ──────────────────
 echo "[T4] execution model — prep mode stages, no recursion"
@@ -171,6 +178,13 @@ python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_feat.json" "$TMP/flows.json"
 # Must screen without a route → fails (gate 8 can't locate the built page)
 python3 -c "import json;d=json.load(open('$TMP/screens.json'));d['screens'][0].pop('route');json.dump(d,open('$TMP/sc_route.json','w'))"
 python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_route.json" "$TMP/flows.json" >/dev/null 2>&1 && bad "Must screen without route should fail" || ok "Must screen requires route → exit 1"
+# image_needs (3.5): valid unsourced need passes; a sourced asset missing alt/provenance fails; bad kind fails
+python3 -c "import json;d=json.load(open('$TMP/screens.json'));d['screens'][0]['image_needs']=[{'kind':'hero','purpose':'landing hero','required':True}];json.dump(d,open('$TMP/sc_img.json','w'))"
+python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_img.json" "$TMP/flows.json" >/dev/null 2>&1 && ok "valid image_needs (unsourced) → exit 0" || bad "valid image_needs should pass"
+python3 -c "import json;d=json.load(open('$TMP/screens.json'));d['screens'][0]['image_needs']=[{'kind':'hero','purpose':'p','sourced':{'source_url':'u','license':'Unsplash License','attribution':'by X'}}];json.dump(d,open('$TMP/sc_img_alt.json','w'))"
+python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_img_alt.json" "$TMP/flows.json" >/dev/null 2>&1 && bad "sourced image without alt should fail" || ok "sourced image needs provenance + alt → exit 1"
+python3 -c "import json;d=json.load(open('$TMP/screens.json'));d['screens'][0]['image_needs']=[{'kind':'meme','purpose':'p'}];json.dump(d,open('$TMP/sc_img_kind.json','w'))"
+python3 "$SCRIPTS_DIR/validate_screens.py" "$TMP/sc_img_kind.json" "$TMP/flows.json" >/dev/null 2>&1 && bad "bad image kind should fail" || ok "image_needs.kind enum enforced → exit 1"
 
 # ── T9. Aesthetic gate (Step 2.6) ─────────────────────────────────────────────
 echo "[T9] aesthetic gate — valid passes, fake brand + low contrast fails"
@@ -215,6 +229,13 @@ python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_contrast.json" "$TMP/aes_
 # a11y_target must echo design_directives
 python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d['constraints']['a11y_target']='AAA';json.dump(d,open('$TMP/aes_a11y.json','w'))"
 python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_a11y.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && bad "a11y mismatch should fail" || ok "a11y_target must equal directive → exit 1"
+# typography (2.6): explicit weight-driven hierarchy passes; single-weight 'weight' emphasis fails; bad enum fails
+python3 -c "import json;d=json.load(open('$TMP/aesthetic.json'));d['typography']={'scale_ratio':1.25,'emphasis_strategy':'weight','measure_ch':66,'ui_family':'Inter, sans-serif','hierarchy':[{'role':'h1','size':'2rem','weight':700,'leading':'1.1','tracking':'-0.02em'},{'role':'body','size':'1rem','weight':400,'leading':'1.5','tracking':'0'}]};json.dump(d,open('$TMP/aes_typo.json','w'))"
+python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_typo.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && ok "typography (weight-driven, 2 weights) → exit 0" || bad "valid typography should pass"
+python3 -c "import json;d=json.load(open('$TMP/aes_typo.json'));[l.__setitem__('weight',500) for l in d['typography']['hierarchy']];json.dump(d,open('$TMP/aes_typo_flat.json','w'))"
+python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_typo_flat.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && bad "weight emphasis with one weight should fail" || ok "weight emphasis needs ≥2 distinct weights → exit 1"
+python3 -c "import json;d=json.load(open('$TMP/aes_typo.json'));d['typography']['emphasis_strategy']='rainbow';json.dump(d,open('$TMP/aes_typo_enum.json','w'))"
+python3 "$SCRIPTS_DIR/validate_aesthetic.py" "$TMP/aes_typo_enum.json" "$TMP/aes_intel.json" >/dev/null 2>&1 && bad "bad emphasis_strategy should fail" || ok "emphasis_strategy enum enforced → exit 1"
 # optional token-contract check: tokens must be ⊆ the DS contract (passed as 3rd arg)
 cat > "$TMP/contract.json" <<'PY'
 {"package":"@npsin-oreo/design-system","color_tokens":["background","foreground","card","card-foreground","popover","popover-foreground","primary","primary-foreground","secondary","secondary-foreground","muted","muted-foreground","accent","accent-foreground","destructive","border","input","ring"],"scalar_tokens":["radius","font_sans","font_mono"]}
@@ -370,11 +391,12 @@ AUD_OUT="$(python3 "$SCRIPTS_DIR/audit_prototype.py" "$GD" --a11y AA 2>&1)"
 case "$AUD_OUT" in *"directive=FAIL"*) ok "audit_prototype runs gate 7 (directive)";; *) bad "gate 7 not wired into audit_prototype";; esac
 # Step 4.7b runtime audit — scripts present; orchestrator degrades gracefully (no Playwright → exit 0)
 RT="$SCRIPTS_DIR/../references/runtime-audit/scripts"
-[ -f "$RT/audit_runtime.mjs" ] && [ -f "$RT/axe_audit.mjs" ] && [ -f "$RT/verify_states.mjs" ] && ok "runtime-audit scripts vendored" || bad "runtime-audit scripts missing"
+[ -f "$RT/audit_runtime.mjs" ] && [ -f "$RT/axe_audit.mjs" ] && [ -f "$RT/verify_states.mjs" ] && [ -f "$RT/geometry_audit.mjs" ] && ok "runtime-audit scripts vendored" || bad "runtime-audit scripts missing"
 if command -v node >/dev/null 2>&1; then
-  for s in audit_runtime axe_audit verify_states verify_focustrap taste_audit; do node --check "$RT/$s.mjs" 2>/dev/null || bad "runtime script $s.mjs syntax"; done
+  for s in audit_runtime axe_audit verify_states verify_focustrap taste_audit geometry_audit; do node --check "$RT/$s.mjs" 2>/dev/null || bad "runtime script $s.mjs syntax"; done
   echo '<!doctype html><html lang="en"><head><title>x</title></head><body><button>Go</button></body></html>' > "$TMP/rt.html"
   node "$RT/audit_runtime.mjs" "$TMP/rt.html" >/dev/null 2>&1 && ok "runtime audit skips cleanly w/o Playwright → exit 0" || bad "runtime audit should skip (exit 0) without Playwright"
+  out=$(node "$RT/geometry_audit.mjs" "$TMP/rt.html" 2>&1); echo "$out" | grep -q "SKIPPED" && [ "$(node "$RT/geometry_audit.mjs" "$TMP/rt.html" >/dev/null 2>&1; echo $?)" = "0" ] && ok "geometry_audit degrades gracefully (SKIPPED → exit 0)" || bad "geometry_audit should SKIP + exit 0 without Playwright"
 else
   ok "node absent — runtime-audit syntax/skip checks N/A"
 fi
@@ -393,9 +415,9 @@ else
   bad "DTCG token kit not vendored"
 fi
 
-# ── T12. UX layers — User Research / Competitive / Usability honesty gates ────
-echo "[T12] UX layers (2.3 research · 2.4 competitive · 4.8 usability)"
-[ -f "$REFS/user-research-layer.md" ] && [ -f "$REFS/competitive-analysis-layer.md" ] && [ -f "$REFS/usability-test-layer.md" ] && ok "UX layer references present" || bad "UX layer references missing"
+# ── T12. UX layers — User Research / Interview / Competitive / Usability honesty gates ────
+echo "[T12] UX layers (2.3 research · 2.3b interview · 2.4 competitive · 4.8 usability)"
+[ -f "$REFS/user-research-layer.md" ] && [ -f "$REFS/interview-layer.md" ] && [ -f "$REFS/competitive-analysis-layer.md" ] && [ -f "$REFS/usability-test-layer.md" ] && ok "UX layer references present" || bad "UX layer references missing"
 
 # research — valid (inferred mode) passes; fabricated evidence fails
 cat > "$TMP/research.json" <<'JSON'
@@ -407,6 +429,22 @@ JSON
 python3 "$SCRIPTS_DIR/validate_research.py" "$TMP/research.json" >/dev/null 2>&1 && ok "valid research (inferred) → exit 0" || bad "valid research should pass"
 python3 -c "import json;d=json.load(open('$TMP/research.json'));d['personas'][0]['source']='evidence';d['personas'][0]['evidence']=['x:ghost'];json.dump(d,open('$TMP/research_bad.json','w'))"
 python3 "$SCRIPTS_DIR/validate_research.py" "$TMP/research_bad.json" >/dev/null 2>&1 && bad "fabricated evidence should fail" || ok "evidence not in inputs_provided → exit 1 (BLOCKED)"
+
+# research opportunity — high-impact + inferred requires a research_question
+python3 -c "import json;d=json.load(open('$TMP/research.json'));d['opportunities']=[{'id':'OPP01','persona_ref':'P01','pain_ref':[],'statement':'hmw','impact':'high','effort':'med','source':'inferred','evidence':[],'confidence':'medium'}];json.dump(d,open('$TMP/research_opp.json','w'))"
+python3 "$SCRIPTS_DIR/validate_research.py" "$TMP/research_opp.json" >/dev/null 2>&1 && bad "high-impact inferred opp w/o research_question should fail" || ok "high-impact inferred opportunity needs research_question → exit 1 (BLOCKED)"
+
+# interview — simulated layer: valid passes; claiming non-simulated fails; primary persona uncovered fails
+cat > "$TMP/interviews.json" <<'JSON'
+{ "meta": { "schema_version": "1.0", "evidence_mode": "inferred", "not_real_user_data": true, "simulated": true, "gate_rounds_used": 1, "overall_confidence": "medium", "limitations": ["role-played, not real"] },
+  "interview_scripts": [{ "persona_ref": "P01", "questions": [{ "id": "Q01", "theme": "pain", "scope": "universal", "text": "q" }, { "id": "Q02", "theme": "behavior", "scope": "universal", "text": "q" }] }],
+  "simulated_responses": [{ "persona_ref": "P01", "question_ref": "Q01", "answer": "a", "quote": "q", "traces_to": ["P01"], "simulated": true }],
+  "affinity_map": [{ "id": "AF01", "theme": "t", "insight": "i", "supporting_quotes": ["Q01", "Q02"], "personas_covered": ["P01"], "pain_ref": [], "confidence": "medium" }],
+  "gate_log": [{ "round": 1, "verdict": "pass", "reason": "ok" }] }
+JSON
+python3 "$SCRIPTS_DIR/validate_interviews.py" "$TMP/interviews.json" "$TMP/research.json" >/dev/null 2>&1 && ok "valid interview (simulated, covers P01) → exit 0" || bad "valid interview should pass"
+python3 -c "import json;d=json.load(open('$TMP/interviews.json'));d['meta']['simulated']=False;json.dump(d,open('$TMP/interviews_bad.json','w'))"
+python3 "$SCRIPTS_DIR/validate_interviews.py" "$TMP/interviews_bad.json" "$TMP/research.json" >/dev/null 2>&1 && bad "non-simulated interview should fail" || ok "meta.simulated must be true → exit 1 (BLOCKED)"
 
 # competitive — valid passes; convention 'break' without reason fails
 cat > "$TMP/competitive.json" <<'JSON'
@@ -428,6 +466,31 @@ JSON
 python3 "$SCRIPTS_DIR/validate_usability.py" "$TMP/usability.json" >/dev/null 2>&1 && ok "valid usability (simulated) → exit 0" || bad "valid usability should pass"
 python3 -c "import json;d=json.load(open('$TMP/usability.json'));d['meta']['not_real_user_testing']=False;json.dump(d,open('$TMP/usability_bad.json','w'))"
 python3 "$SCRIPTS_DIR/validate_usability.py" "$TMP/usability_bad.json" >/dev/null 2>&1 && bad "fake real test should fail" || ok "not_real_user_testing must be true → exit 1 (BLOCKED)"
+
+# scenario edges (2.5b) — standalone valid; severity floor from intelligence; ref resolution
+cat > "$TMP/scenario_edges.json" <<'JSON'
+{ "meta": { "schema_version": "1.0", "overall_confidence": "medium" },
+  "scenario_edges": [{ "id": "SE01", "dimension": "error_tolerance", "scenario": "irreversible override", "trigger": "t", "impact": "i", "severity": "must", "suggested_handling": "undo + audit", "may_inject_flow": { "inject": true, "flow_name": "undo-override" }, "task_ref": "T01", "source": "inferred", "confidence": "medium" }] }
+JSON
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/scenario_edges.json" >/dev/null 2>&1 && ok "valid scenario-edges (standalone) → exit 0" || bad "valid scenario-edges should pass"
+cat > "$TMP/intel_min.json" <<'JSON'
+{ "user_types": [], "core_tasks": [{ "id": "T01" }], "compliance_requirements": [], "error_tolerance": { "overall": "low" }, "decision_criticality": { "overall": "low" } }
+JSON
+python3 -c "import json;d=json.load(open('$TMP/scenario_edges.json'));d['scenario_edges'][0]['severity']='should';json.dump(d,open('$TMP/scenario_edges_bad.json','w'))"
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/scenario_edges_bad.json" "$TMP/intel_min.json" >/dev/null 2>&1 && bad "low error_tolerance edge must be 'must'" || ok "severity floor (error_tolerance low ⇒ must) → exit 1 (BLOCKED)"
+python3 -c "import json;d=json.load(open('$TMP/scenario_edges.json'));d['scenario_edges'][0]['task_ref']='T99';json.dump(d,open('$TMP/scenario_edges_ref.json','w'))"
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/scenario_edges_ref.json" "$TMP/intel_min.json" >/dev/null 2>&1 && bad "unresolved task_ref should fail" || ok "scenario edge ref resolves into intelligence → exit 1 (BLOCKED)"
+
+# feedback loop (4.9) — valid scored findings; score-math mismatch fails; systemic needs reach ≥ 2
+cat > "$TMP/test_findings.json" <<'JSON'
+{ "meta": { "schema_version": "1.0", "iteration": 1, "test_method": "real_user", "convergence": { "new_this_round": 1, "dry_rounds": 0 } },
+  "findings": [{ "id": "FD01", "raw": "r", "type": "observed", "problem_statement": "operators can't find a guest by name", "maps_to": null, "severity": 2, "reach": 2, "confidence": "high", "priority_score": 12, "verdict": "systemic", "decision": "fix_now", "target_iteration": 2 }] }
+JSON
+python3 "$SCRIPTS_DIR/validate_test_findings.py" "$TMP/test_findings.json" >/dev/null 2>&1 && ok "valid test-findings (scored) → exit 0" || bad "valid test-findings should pass"
+python3 -c "import json;d=json.load(open('$TMP/test_findings.json'));d['findings'][0]['priority_score']=99;json.dump(d,open('$TMP/tf_score.json','w'))"
+python3 "$SCRIPTS_DIR/validate_test_findings.py" "$TMP/tf_score.json" >/dev/null 2>&1 && bad "wrong priority_score should fail" || ok "priority_score = severity×reach×confidence enforced → exit 1 (BLOCKED)"
+python3 -c "import json;d=json.load(open('$TMP/test_findings.json'));d['findings'][0]['reach']=1;d['findings'][0]['priority_score']=6;json.dump(d,open('$TMP/tf_sys.json','w'))"
+python3 "$SCRIPTS_DIR/validate_test_findings.py" "$TMP/tf_sys.json" >/dev/null 2>&1 && bad "systemic with reach 1 should fail" || ok "systemic verdict needs reach ≥ 2 → exit 1 (BLOCKED)"
 
 # ── T13. setup-prototype — Model A import-only (no vendored/rsync path) ────────
 echo "[T13] setup-prototype — import-only (no copy/rsync, token hard-required)"

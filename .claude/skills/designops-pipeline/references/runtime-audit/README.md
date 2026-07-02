@@ -16,9 +16,15 @@ without it, every gate prints `SKIPPED` and the run exits 0 (never blocks the de
 | **states** | `verify_states.mjs` | text/bg contrast in **default + hover + focus** (a button that turns the wrong color on hover) | 🔴 yes |
 | **focus-trap** | `verify_focustrap.mjs` | modal traps Tab, has `role=dialog`+`aria-modal`+name, Esc returns focus (WCAG 2.1.2/2.4.3) — only when `--open=<sel>` given | 🔴 yes |
 | **taste** | `taste_audit.mjs` | render-based anti-slop (type-scale drama, equal-weight repetition, body measure, palette, pure #000/#fff, whitespace) | advisory (report only) |
+| **geometry** | `geometry_audit.mjs` | measured geometric correctness: off-4px-grid spacing, **WCAG 2.2 §2.5.8** target size (<24px), tiny text (<12px), optical edge misalignment (1–3px), same-class component padding drift | advisory (`--strict` to gate) |
 | rtl / responsive | `verify_rtl.mjs` · `verify_responsive.mjs` | RTL mirroring · breakpoint behavior (run directly when relevant) | 🔴 yes |
 
-`audit_runtime.mjs` orchestrates axe + states (+ focus-trap if a trigger is given) + the taste report.
+`audit_runtime.mjs` orchestrates axe + states (+ focus-trap if a trigger is given) + the taste + geometry reports.
+
+> **geometry** is grounded in three sources so findings trace back, not vibes: the **8pt grid** (spacing
+> snaps to a 4px step), **WCAG 2.2 §2.5.8 Target Size (Minimum)** (interactive ≥ 24×24px), and
+> **Universal Design** (low physical effort / perceptible information → touch reach + min text size).
+> Run standalone with `--strict` to make a <24px target a hard fail: `node scripts/runtime/geometry_audit.mjs out/index.html --strict`.
 
 ## Enable + run (inside `output/prototype/`, after `npm run build`)
 

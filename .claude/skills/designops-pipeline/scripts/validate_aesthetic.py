@@ -67,6 +67,12 @@ SIGNATURE_ENUMS = {
     "type_weight": {"regular", "medium", "semibold"},
     "tracking": {"tighter", "tight", "normal", "wide"},
 }
+# optional typography block — an explicit hierarchy + weight-driven emphasis spec (Step 2.6).
+# Distinct from axes.typography (which records WHICH system type is resolved from); this is the
+# concrete scale/hierarchy/emphasis the build + audit verify. Emphasis should come from weight/size,
+# not colour/italic (design-taste.md: "Weight and size create hierarchy, not extra fonts").
+EMPHASIS_STRATEGY = {"weight", "size", "color", "italic"}
+
 # contrast pairs the gate insists on (recomputed from hex below). text-on-surface = error.
 REQUIRED_CONTRAST_PAIRS = {
     "foreground/background", "primary-foreground/primary",
@@ -258,6 +264,45 @@ def validate(aesthetic_path, intel_path=None, contract_path=None):
         for k, v in sig.items():
             if k in SIGNATURE_ENUMS and v not in SIGNATURE_ENUMS[k]:
                 errors.append(f"signature.{k} must be one of {sorted(SIGNATURE_ENUMS[k])} (got {v!r})")
+
+    # ── typography (optional): explicit hierarchy + weight-driven emphasis ────────
+    typo = d.get("typography")
+    if typo is not None:
+        if not isinstance(typo, dict):
+            errors.append("typography must be an object { scale_ratio, hierarchy[], emphasis_strategy, measure_ch }")
+        else:
+            sr = typo.get("scale_ratio")
+            if not isinstance(sr, (int, float)) or sr <= 1:
+                errors.append("typography.scale_ratio must be a number > 1 (e.g. 1.2, 1.25, 1.333)")
+            hier = typo.get("hierarchy")
+            weights = []
+            if not isinstance(hier, list) or len(hier) < 2:
+                errors.append("typography.hierarchy must list ≥2 roles (hierarchy needs contrast)")
+            else:
+                for i, lvl in enumerate(hier):
+                    if not lvl.get("role"):
+                        errors.append(f"typography.hierarchy[{i}].role is required")
+                    w = lvl.get("weight")
+                    if not isinstance(w, int) or not (100 <= w <= 900):
+                        errors.append(f"typography.hierarchy[{i}].weight must be an int 100..900 (got {w!r})")
+                    else:
+                        weights.append(w)
+            es = typo.get("emphasis_strategy")
+            if es not in EMPHASIS_STRATEGY:
+                errors.append(f"typography.emphasis_strategy must be one of {sorted(EMPHASIS_STRATEGY)} (got {es!r})")
+            # the point of the block: emphasis should come from weight/size, not colour/italic
+            if es in {"color", "italic"}:
+                warnings.append(f"typography.emphasis_strategy={es} — prefer 'weight' or 'size'; weight "
+                                "creates hierarchy without extra colour/ink (design-taste.md)")
+            # weight-driven emphasis must actually USE ≥2 distinct weights
+            if es == "weight" and len(set(weights)) < 2:
+                errors.append("typography.emphasis_strategy is 'weight' but the hierarchy uses a single weight "
+                              "— weight-driven emphasis needs ≥2 distinct weights")
+            mc = typo.get("measure_ch")
+            if mc is not None and (not isinstance(mc, (int, float)) or not (45 <= mc <= 90)):
+                warnings.append(f"typography.measure_ch={mc} outside 45–90ch — check line-length readability")
+            if typo.get("ui_family") and tok.get("font_sans") and typo["ui_family"] != tok["font_sans"]:
+                warnings.append("typography.ui_family differs from tokens.font_sans — keep the UI family single/consistent")
 
     # ── constraints must echo the upstream directives ─────────────────────────────
     cons = d["constraints"]

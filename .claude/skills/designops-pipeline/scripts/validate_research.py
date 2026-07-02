@@ -18,6 +18,8 @@ RISK = {"low", "med", "high"}
 PRIORITY = {"must", "should", "could"}
 METHOD = {"interview", "survey", "analytics", "usability_test"}
 STATUS = {"unvalidated", "validated", "invalidated"}
+IMPACT_EFFORT = {"low", "med", "high"}
+JOURNEY_MODE = {"existing_product", "workaround", "none"}
 
 
 def _enum(val, allowed, path, errors):
@@ -116,10 +118,32 @@ def validate(path, brief_path=None):
         if a.get("risk_if_wrong") == "high" and a.get("id") not in tied:
             errors.append(f"{path}: high-risk assumption has no research_question tied to {a.get('id')!r}")
 
+    rq_ids = set()
     for i, q in enumerate(rqs):
         path = f"research_questions[{i}]"
+        qid = q.get("id")
+        if qid:
+            rq_ids.add(qid)
         _enum(q.get("method"), METHOD, f"{path}.method", errors)
         _enum(q.get("priority"), {"blocker", "important", "nice_to_know"}, f"{path}.priority", errors)
+
+    # opportunities — where the as-is breaks becomes a chance to improve. Register ids first so the
+    # journey's opportunity_ref can resolve; honesty rules match every other item.
+    opportunities = data.get("opportunities", [])
+    for i, o in enumerate(opportunities):
+        path = f"opportunities[{i}]"
+        reg(o.get("id"), "opportunity", path)
+        _enum(o.get("impact"), IMPACT_EFFORT, f"{path}.impact", errors)
+        _enum(o.get("effort"), IMPACT_EFFORT, f"{path}.effort", errors)
+        if not o.get("statement"):
+            errors.append(f"{path}.statement: required (a 'how might we…' framing)")
+        honesty(o, path)
+        rq = o.get("research_question")
+        if o.get("impact") == "high" and o.get("source") == "inferred" and not rq:
+            errors.append(f"{path}: high-impact + inferred opportunity must carry a research_question "
+                          "(don't rest a big bet on an unvalidated guess)")
+        if rq and rq not in rq_ids:
+            errors.append(f"{path}.research_question {rq!r} does not resolve to a research_questions id")
 
     # ref resolution
     def resolve(ref, kinds, path):
@@ -135,6 +159,28 @@ def validate(path, brief_path=None):
         resolve(j.get("persona_ref"), {"persona"}, f"jobs_to_be_done[{i}].persona_ref")
     for i, pp in enumerate(pains):
         resolve(pp.get("persona_ref"), {"persona"}, f"pain_points[{i}].persona_ref")
+    for i, o in enumerate(opportunities):
+        resolve(o.get("persona_ref"), {"persona"}, f"opportunities[{i}].persona_ref")
+        for pr in o.get("pain_ref", []):
+            resolve(pr, {"pain"}, f"opportunities[{i}].pain_ref")
+
+    # current_state_journey — conditional (flow-shaped only); re-projects pains onto a timeline.
+    for i, cj in enumerate(data.get("current_state_journey", [])):
+        path = f"current_state_journey[{i}]"
+        _enum(cj.get("mode"), JOURNEY_MODE, f"{path}.mode", errors)
+        resolve(cj.get("persona_ref"), {"persona"}, f"{path}.persona_ref")
+        if cj.get("mode") == "none" and cj.get("phases"):
+            errors.append(f"{path}: mode 'none' means there is no as-is to map — omit the journey "
+                          "rather than inventing phases")
+        for k, ph in enumerate(cj.get("phases", [])):
+            ppath = f"{path}.phases[{k}]"
+            emo = ph.get("emotion")
+            if not isinstance(emo, (int, float)) or not (-2 <= emo <= 2):
+                errors.append(f"{ppath}.emotion must be a number in [-2, 2]")
+            for pr in ph.get("pains_ref", []):
+                resolve(pr, {"pain"}, f"{ppath}.pains_ref")
+            for orf in ph.get("opportunity_ref", []):
+                resolve(orf, {"opportunity"}, f"{ppath}.opportunity_ref")
 
     flags = {}
     if meta.get("overall_confidence") == "low":

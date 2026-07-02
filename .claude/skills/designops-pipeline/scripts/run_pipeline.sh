@@ -62,6 +62,7 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     --tor)       TOR_FILE="$2";  shift 2 ;;
     --tor-text)  TOR_TEXT="$2";  shift 2 ;;
+    --intent)    TOR_TEXT="$2";  shift 2 ;;   # any product intent (PRD / one-line idea / redesign / notes) — intake generalises it → brief.json
     --ds)        DS_PATH="$2";   shift 2 ;;
     --brief)     BRIEF_JSON="$2"; shift 2 ;;
     --out)       OUT_DIR="$2";   shift 2 ;;
@@ -103,6 +104,7 @@ if [[ -z "$TOR_FILE" && -z "$TOR_TEXT" && -z "$BRIEF_JSON" ]]; then
   err "you must provide at least one input:
   --tor <path>        TOR file (PDF or DOCX)
   --tor-text \"<text>\" TOR text directly
+  --intent \"<text>\"   any product intent (PRD / one-line idea / redesign / notes) — intake generalises it
   --brief <path>      skip steps 1+2, use an existing brief.json"
 fi
 
@@ -168,18 +170,29 @@ except Exception as e:
   # Write prompt file for Claude Code to execute
   PROMPT_FILE="$OUT_DIR/.prompt_step1.txt"
   cat > "$PROMPT_FILE" << PROMPT
-Read the TOR below and produce 2 output files per the designops-pipeline SKILL.md:
+Read the product intent below and produce 2 output files per the designops-pipeline SKILL.md:
 
 1. Save "$OUT_DIR/brief.md" — Markdown for humans to review
 2. Save "$OUT_DIR/brief.json" — JSON schema for the AI to consume next
 
+INTAKE (the hourglass waist — see $SKILL_DIR/references/intake-layer.md): the input may be a TOR, a
+PRD, a one-line idea, a redesign target, notes, or analytics. Run intake as a THIN normaliser — collect
+stated facts, do NOT synthesise personas/JTBD (that is 2.3/2.5's job).
+- Set meta.input_type (tor|prd|redesign|notes|analytics|idea|mixed) and meta.source_file (origin).
+- Set meta.tor_confidence from how much is grounded (a one-line idea = "low" → constrain_downstream;
+  a full TOR/PRD = "high"). Record meta.intake { asked, inferred, skipped }.
+- 4-WAY GATE per required field: present → use; safely inferable → infer + an open_question; critical +
+  unguessable → ASK the user (batch, grouped, skippable, one follow-up round max); admin (budget /
+  file formats / procurement / committee) → skip. Ask ONLY the critical+unguessable bucket. Ask to
+  sufficiency, not completeness. NEVER fabricate — an unknown critical field is null + an open_question.
+
 Use the 8 main categories: PROJECT_OVERVIEW, TARGET_USERS, CORE_FEATURES, USER_FLOWS,
 CONSTRAINTS, DESIGN_DIRECTION, SUCCESS_METRICS, OPEN_QUESTIONS
 
-If the TOR doesn't state a category → set null, don't make it up.
+If the intent doesn't state a category → set null, don't make it up.
 A feature with no priority → default to Should.
 
-TOR content:
+Product intent content:
 ---
 $TOR_CONTEXT
 ---
@@ -225,6 +238,38 @@ if [[ -f "$RESEARCH_JSON" ]]; then
     err "research.json validation failed — fix it first, or re-run Step 2.3"
   }
   log "✓ research.json valid"
+fi
+
+# ── step 2.3b: personas → simulated interview + affinity ──────────────────────
+# The AI role-plays each persona through a tailored interview; a quality gate rejects circular
+# (hall-of-mirrors) answers; the affinity map feeds pains/opportunities back into research.
+# SIMULATED, honesty-gated — never passed off as real user research.
+INTERVIEWS_JSON="$OUT_DIR/interviews.json"
+if [[ -f "$RESEARCH_JSON" && ! -f "$INTERVIEWS_JSON" ]]; then
+  step "Step 2.3b — Interview + Affinity Layer (research → interviews.json)"
+  PROMPT_INTERVIEWS="$OUT_DIR/.prompt_interviews.txt"
+  cat > "$PROMPT_INTERVIEWS" << PROMPT
+Read "$BRIEF_JSON" and "$RESEARCH_JSON" (personas), then produce "$INTERVIEWS_JSON" following
+$SKILL_DIR/references/interview-layer.md (the Interview + Affinity Layer).
+
+This is a SIMULATED interview — you role-play each persona; it is NOT real research. Be honest:
+meta.not_real_user_data:true, meta.simulated:true, every response simulated:true, overall_confidence
+<= medium, limitations non-empty. Write 6-10 open, unbiased questions per persona; answer AS the persona,
+grounded in their fields + the brief (traces_to must cite that grounding — never invent a fact).
+Run the quality gate: any circular answer (a paraphrase of the persona) or one that traces to nothing →
+rewrite the question sharper / from another angle and re-answer (log rounds in gate_log, cap 3). Cluster
+the quotes into an affinity_map (each insight cites >=2 distinct questions + the pains it maps to).
+Interview every primary persona. Hand affinity pain_ref/insights back into research.json (pain_points /
+opportunities) as HYPOTHESES to validate later with real users.
+PROMPT
+  _generate "$PROMPT_INTERVIEWS" "Step 2.3b — research → simulated interview + affinity" "$INTERVIEWS_JSON"
+fi
+if [[ -f "$INTERVIEWS_JSON" ]]; then
+  step "Validating interviews.json"
+  python3 "$SKILL_DIR/scripts/validate_interviews.py" "$INTERVIEWS_JSON" "$RESEARCH_JSON" || {
+    err "interviews.json validation failed — fix it first, or re-run Step 2.3b"
+  }
+  log "✓ interviews.json valid"
 fi
 
 # ── step 2.4: brief + research → competitive analysis (UX) ────────────────────
@@ -278,21 +323,56 @@ by at least one task/goal — otherwise the contractual scope was dropped and th
 
 If "$RESEARCH_JSON" exists, use feeds_intelligence as evidence: personas → user_types,
 jobs_to_be_done → user_goals, pain_points/behavioral_assumptions → error_tolerance/open_questions
-(evidence-backed research raises confidence; inferred research stays a hypothesis). If
+(evidence-backed research raises confidence; inferred research stays a hypothesis). Set each
+user_type.persona_ref to the research persona it derives from — every primary persona must become
+>=1 user_type (the gate enforces this coverage when research.json is present). If
 "$COMPETITIVE_JSON" exists, use its feeds for data_density + expected patterns.
 PROMPT
   _generate "$PROMPT_INTEL" "Step 2.5 — brief → product intelligence" "$INTEL_JSON"
 fi
 
-# validate intelligence.json (gate)
+# validate intelligence.json (gate) — pass research.json (when present) so the
+# user_type → persona coverage invariant is enforced (every user type traces to a persona).
 if [[ -f "$INTEL_JSON" ]]; then
   step "Validating intelligence.json"
-  python3 "$SKILL_DIR/scripts/validate_intelligence.py" "$INTEL_JSON" "$BRIEF_JSON" || {
+  RESEARCH_ARG=""; [[ -f "$RESEARCH_JSON" ]] && RESEARCH_ARG="$RESEARCH_JSON"
+  python3 "$SKILL_DIR/scripts/validate_intelligence.py" "$INTEL_JSON" "$BRIEF_JSON" ${RESEARCH_ARG:+"$RESEARCH_ARG"} || {
     err "intelligence.json validation failed — fix it first, or re-run Step 2.5"
   }
   log "✓ intelligence.json valid"
 elif [[ -f "$BRIEF_JSON" ]]; then
   log "intelligence.json not generated yet — flows (Step 3) need its design_directives"
+fi
+
+# ── step 2.5b: intelligence → scenario edges (runs parallel with 2.6) ─────────
+# Scenario/requirement edge cases — the 10 intelligence dimensions pushed to their edge. One
+# altitude ABOVE 3.7's screen-state edges: it discovers MISSING flows before Step 3 (may_inject_flow),
+# then hands those flows to 3.5/3.7. Severity is driven by the directives, not taste.
+SCENARIO_EDGES_JSON="$OUT_DIR/scenario-edges.json"
+if [[ -f "$INTEL_JSON" && ! -f "$SCENARIO_EDGES_JSON" ]]; then
+  step "Step 2.5b — Scenario Edge Discovery (intelligence → scenario-edges.json)"
+  PROMPT_SE="$OUT_DIR/.prompt_scenario_edges.txt"
+  cat > "$PROMPT_SE" << PROMPT
+Read "$INTEL_JSON" (the 10 dimensions + design_directives) and "$BRIEF_JSON", then produce
+"$SCENARIO_EDGES_JSON" following $SKILL_DIR/references/scenario-edge-layer.md.
+
+Walk each of the 10 intelligence dimensions to its boundary/failure scenario (see the taxonomy). Ground
+every edge in the dimension it rests on + refs (user_type_ref/task_ref/compliance_ref) that resolve into
+intelligence.json. Severity comes from intelligence, NOT taste: low/zero error_tolerance → its edges are
+must (+ a recovery in suggested_handling); high/safety decision_criticality → must; mandatory compliance
+→ a must edge. Snapshot the floors into meta.driven_by. When an edge implies a whole flow that doesn't
+exist yet, set may_inject_flow.inject=true + a flow_name (Step 3 adds it). A must edge resting on a
+low-confidence inference carries an open_question. Do NOT do screen-state edges (empty/loading/error per
+screen) — that is Step 3.7; this is the product/requirement altitude.
+PROMPT
+  _generate "$PROMPT_SE" "Step 2.5b — intelligence → scenario edges" "$SCENARIO_EDGES_JSON"
+fi
+if [[ -f "$SCENARIO_EDGES_JSON" ]]; then
+  step "Validating scenario-edges.json"
+  python3 "$SKILL_DIR/scripts/validate_scenario_edges.py" "$SCENARIO_EDGES_JSON" "$INTEL_JSON" || {
+    err "scenario-edges.json validation failed — fix it first, or re-run Step 2.5b"
+  }
+  log "✓ scenario-edges.json valid"
 fi
 
 # ── step 2.6 (Aesthetic): brief + intelligence → aesthetic.json ───────────────
@@ -356,6 +436,11 @@ Process (anti-slop — deciding BEFORE generating; see $AESTHETICS_DIR/taste/des
 3b. Commit a signature object for the non-colour identity (expressed later via Tailwind utilities):
    { border_style: solid|translucent|none, elevation: flat|soft|layered,
      type_weight: regular|medium|semibold, tracking: tighter|tight|normal|wide }.
+3c. Commit a typography object — an EXPLICIT hierarchy, not just a font. From the system's DESIGN.md:
+   { scale_ratio (>1, e.g. 1.25), hierarchy:[{role, size, weight(100-900), leading, tracking}] for
+     h1..body..caption (≥2 roles), emphasis_strategy, measure_ch (45–90), ui_family, display_family }.
+   emphasis_strategy MUST be "weight" or "size" — hierarchy comes from weight+size, NOT extra colour/
+   italic/fonts (design-taste.md). If "weight", the hierarchy must use ≥2 distinct weights.
 4. Obey constraints: constraints.a11y_target MUST equal design_directives.a11y_target and
    constraints.density_target MUST equal design_directives.density_target; set
    constraints.dark_mode (true unless the product is explicitly light-only). A colour that
@@ -374,6 +459,7 @@ Process (anti-slop — deciding BEFORE generating; see $AESTHETICS_DIR/taste/des
 Shape: { meta, brief_inference{domain,audience_tone,mood_adjective,motion_depth,rationale},
 direction{type,name,category,spec_ref,why_fit},
 signature{border_style,elevation,type_weight,tracking},
+typography{scale_ratio,hierarchy:[{role,size,weight,leading,tracking}],emphasis_strategy,measure_ch,ui_family,display_family},
 tokens{radius,font_sans,font_mono,colors:{light:{...18 tokens},dark:{...18 tokens}}},
 axes{color,typography,shape,elevation,spacing,motion each {source,rationale,resolved?}},
 contrast_checks:[{pair,fg_hex,bg_hex,ratio,large?,ui?}],
@@ -414,6 +500,8 @@ Refine each brief.user_flow using design_directives:
 - safeguard_level → inject confirm / preview / undo steps on risky actions (mark step.safeguard)
 - mandatory_flows → ADD an injected flow per directive (e.g. consent, privacy_notice) with source_flow_ref:null
 - decision_criticality decision_points → mark step.decision:true where the user commits a high-stakes choice
+- if "$SCENARIO_EDGES_JSON" exists → ADD an injected flow for every scenario_edge with
+  may_inject_flow.inject=true (use its flow_name, source_flow_ref:null) — these are the missing flows 2.5b found
 
 Shape per flows.json: { meta, navigation_model, flows:[{id,name,source_flow_ref,user_type_ref,goal_ref,
 steps:[{n,action,decision,safeguard}],entry,exit,directives_applied:[]}], mandatory_flows:[{name,reason,injected}] }
@@ -556,6 +644,10 @@ Derive screens from FLOWS (each flow → its screens), driving every decision fr
 - a11y_target      → component variants + the Step 4.7 audit target
 - mandatory_flows  → each injected flow gets its screen(s) (e.g. consent, privacy_notice)
 - trust_emphasis   → evidence-on-demand / transparency affordances
+- image_needs      → per $SKILL_DIR/references/image-sourcing.md: from the screen type + the aesthetic mood
+                     (aesthetic.json direction/mood_adjective), does the screen need imagery? Add image_needs:[]
+                     (hero/illustration/avatar/thumbnail/empty_state_art). Flat/utility screens get NONE — don't
+                     add photography a Linear/dashboard look wouldn't use. Sourcing happens at Step 4.
 Coverage rule: EVERY flow in flows.json must have at least one screen; every screen.flow_refs must resolve.
 Traceability: give each screen a feature_refs:[] listing the brief.core_features ids it delivers. EVERY Must
 feature — and EVERY scoring_criteria.minimum_viable.must_have_features id — must be covered by ≥1 screen
@@ -565,7 +657,7 @@ If meta.overall_confidence=low (constrain_downstream), produce wireframe-level s
 
 screen-inventory.json shape: { meta:{must_have_features:[]}, screens:[{id,name,route,flow_refs:[],feature_refs:[],
 states:[loading|empty|error],user_type_ref,priority:Must|Should|Could, purpose, layout_primitive,
-components:[from the DS inventory], gaps:[{name,status:missing|partial,recommendation}], directive_drivers:[]}] }
+components:[from the DS inventory], image_needs:[{kind,purpose,required}], gaps:[{name,status:missing|partial,recommendation}], directive_drivers:[]}] }
 
 design system path: $DS_PATH
 design system inventory:

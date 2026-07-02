@@ -19,7 +19,7 @@ this index covers the 6 that were added last and where each plugs in.
 ## How they relate to the pipeline
 
 ```
-TOR ──► brief ──► intelligence(2.5) ──► aesthetic(2.6) ──► flows ──► screens(3.5) ──► prototype(4) ──► critique(4.6) ──► audit(4.7) ──► [storybook 4.8] ──► Figma(5)
+TOR ──► brief ──► intelligence(2.5) ──► aesthetic(2.6) ──► flows ──► screens(3.5) ──► prototype(4) ──► critique(4.6) ──► audit(4.7) ──► [storybook 4.7c] ──► Figma(5)
                                           ▲   ▲   ▲                      ▲                  ▲                ▲
                             image-to-code ┘   │   └ migrate-design-system │     ux-writing ─┤     ux-writing │ (gate 3: no emoji)
                                   brandkit ────┘                          └─ ux-writing copy ┘     anti-slop  │

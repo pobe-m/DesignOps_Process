@@ -27,6 +27,9 @@ REQUIRED_META_KEYS = ["project_name", "generated_at", "source_file"]
 VALID_PRIORITIES = {"Must", "Should", "Could"}
 VALID_IMPACTS    = {"blocker", "important", "nice-to-know"}
 VALID_CONFIDENCE = {"high", "medium", "low"}
+# Intake layer (Step 1.0): what kind of product intent produced this brief. Optional +
+# back-compatible — a TOR-only run may omit it. See references/intake-layer.md.
+VALID_INPUT_TYPES = {"tor", "prd", "redesign", "notes", "analytics", "idea", "mixed"}
 # Design interpretation (presets, density, a11y target) lives in intelligence.json
 # (Product Intelligence Layer / validate_intelligence.py), not in the factual brief.
 
@@ -61,6 +64,23 @@ def validate(path: str) -> list[str]:
     conf = meta.get("tor_confidence", "")
     if conf and conf not in VALID_CONFIDENCE:
         errors.append(f"meta.tor_confidence must be one of: {VALID_CONFIDENCE} (got: '{conf}')")
+
+    # ── intake layer (Step 1.0) — optional, back-compatible ─────────────────────
+    itype = meta.get("input_type", "")
+    if itype and itype not in VALID_INPUT_TYPES:
+        errors.append(f"meta.input_type must be one of: {sorted(VALID_INPUT_TYPES)} (got: '{itype}')")
+    # honesty: a one-line idea can't claim a high confidence floor
+    if itype == "idea" and conf and conf != "low":
+        errors.append("meta.input_type 'idea' (thin input) requires meta.tor_confidence 'low' "
+                      "(→ constrain_downstream); don't claim confidence from one line")
+    intake = meta.get("intake")
+    if intake is not None:
+        if not isinstance(intake, dict):
+            errors.append("meta.intake must be an object { asked, inferred, skipped }")
+        else:
+            for k in ("asked", "inferred", "skipped"):
+                if k in intake and not isinstance(intake[k], list):
+                    errors.append(f"meta.intake.{k} must be a list")
 
     # ── project_overview ──────────────────────────────────────────────────────
     po = data["project_overview"]
@@ -197,14 +217,20 @@ def main():
         mv = sc.get("minimum_viable") or {}
         must_score_features = len(mv.get("must_have_features", []))
 
+        conf = data["meta"].get("tor_confidence", "-")
+        constrain = "true" if conf == "low" else "false"
         print(f"[validate_brief] ✓ Valid")
         print(f"  Project   : {data['meta'].get('project_name', '-')}")
-        print(f"  Confidence: {data['meta'].get('tor_confidence', '-')}")
+        print(f"  Input type: {data['meta'].get('input_type', '-')}")
+        print(f"  Confidence: {conf}   (constrain_downstream={constrain})")
         print(f"  Users     : {users} personas")
         print(f"  Features  : {must} Must / {should} Should / {could} Could")
         print(f"  Flows     : {flows}")
         print(f"  Open Q    : {oq_count} items")
         print(f"  Scoring   : {sc_items} criteria · {must_score_features} must-have features")
+        if constrain == "true":
+            print("  ⚠ tor_confidence=low → constrain_downstream: Steps 3/4 should produce "
+                  "wireframe-level output + a human gate")
         sys.exit(0)
     else:
         print(f"[validate_brief] ✗ Invalid — {len(errors)} error(s):", file=sys.stderr)

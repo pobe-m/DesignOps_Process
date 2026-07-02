@@ -8,22 +8,35 @@ description: >
   "brief requirement from TOR", "designops-pipeline", "tor-to-brief" (the former name),
   "drop a TOR", "design brief from spec", or wants the AI to read a spec/scope document and produce
   a design requirement or prototype. Supports PDF, DOCX, and Notion/Google Docs URLs.
+  Step 1.0 (Intake — the hourglass waist) generalises the input beyond a TOR: any product intent (a PRD,
+  a one-line idea, a redesign target, notes, analytics) normalises into the same brief.json via a thin
+  4-way completeness gate that sets a confidence floor and asks only the prototype-critical gaps.
   In Claude Code, run `scripts/run_pipeline.sh` to chain the full pipeline automatically.
   Step 2.5 (Product Intelligence Layer) infers 10 measurable product dimensions and derives an
   open design_directives object (density, a11y target, safeguards, navigation) — industry-agnostic.
   Step 2.6 (Aesthetic Direction) picks one of 138 named design systems or an archetype and resolves
   it into the full identity token set (surfaces/text/accent/border + dark theme, not just primary),
-  contrast-checked, + a signature → aesthetic.json + a brand.config.json that carries the whole theme.
+  contrast-checked, + a signature + an explicit typographic hierarchy (scale + weight-driven emphasis,
+  not colour/italic) → aesthetic.json + a brand.config.json that carries the whole theme.
+  Step 2.5b (Scenario Edge Discovery → scenario-edges.json) runs parallel with 2.6 and enumerates the
+  scenario/requirement edge cases — the 10 dimensions pushed to their edge — discovering MISSING flows
+  before Step 3 (one altitude above 3.7); severity driven by the directives, not taste.
   Step 3.7 (Edge-Case Analysis → edge-cases.json) enumerates the non-happy-path conditions every Must
   screen must survive, via UI Stack × CORRECT, severity driven by the Step 2.5 directives.
   Step 4 builds a POC prototype from a ready-made component library + mock data, Step 4.6 runs a
   scored critique (6 weighted dimensions + Nielsen + anti-slop + a separate judge pass), Step 4.7 is a runnable audit gate
   (audit_prototype.py — 11 gates: tokens + WCAG contrast in light/dark + no-emoji + component contracts + no remote-font @import + theme fidelity + directive fidelity + screen coverage + edge-case coverage + font fidelity + axis fidelity) before handoff.
-  UX layers feed the pipeline: Step 2.3 (User Research → research.json: personas/JTBD/pains) and
-  Step 2.4 (Competitive Analysis → competitive.json) supply evidence to Step 2.5; Step 4.8
-  (Usability Test → usability.json: heuristic + automated + simulated persona walkthrough) runs on
-  the built prototype. All three are HYBRID (infer-then-override) and honesty-gated — nothing is
-  marked evidence without a declared input, and usability never claims a real-user test.
+  UX layers feed the pipeline: Step 2.3 (User Research → research.json: personas/JTBD/pains),
+  Step 2.3b (Interview + Affinity → interviews.json: a simulated persona role-play + affinity map,
+  quality-gated against circular answers) and Step 2.4 (Competitive Analysis → competitive.json) supply
+  evidence to Step 2.5; Step 4.8 (Usability Test → usability.json: heuristic + automated + simulated
+  persona walkthrough) runs on the built prototype. All are HYBRID (infer-then-override) and honesty-gated
+  — nothing is marked evidence without a declared input, and neither the interview nor the usability layer
+  claims a real-user test. Step 2.5 also enforces a coverage invariant: every user_type traces back to a
+  2.3 persona (persona_ref), so no audience is invented or dropped between research and intelligence.
+  Step 4.9 (Feedback Loop → test-findings.json) closes the loop: it de-solutionises real test feedback,
+  scores it (severity × reach × confidence; observed > stated; systemic vs individual), fixes the top-N
+  into the next prototype, and grades the upstream hypotheses inferred → evidence — build → test → repeat.
 ---
 
 # designops-pipeline
@@ -44,16 +57,20 @@ TOR (PDF / DOCX / Notion / GDocs)
   │  (humans)   │     │  (AI consumes)   │
   └─────────────┘     └────────┬─────────┘
                                │  validate_brief.py
-                               ▼  Step 2.3 User Research · Step 2.4 Competitive (UX, hybrid)
+                               ▼  Step 2.3 User Research · 2.3b Interview+Affinity · 2.4 Competitive (UX, hybrid)
                     ┌─────────────────────────────┐
-                    │  research.json              │  personas / JTBD / pains
-                    │  competitive.json           │  ← validate_research.py / validate_competitive.py
+                    │  research.json              │  personas / JTBD / pains / journey / opportunities
+                    │  interviews.json            │  simulated role-play → affinity map (→ pains)
+                    │  competitive.json           │  ← validate_research / _interviews / _competitive
                     └──────────┬──────────────────┘     (honesty-gated: no fabricated evidence)
                                ▼  Step 2.5  Product Intelligence Layer (consumes UX evidence)
+                               │            user_type → persona coverage enforced
                     ┌─────────────────────┐
                     │  intelligence.json  │  10 dims → design_directives
                     └──────────┬──────────┘
                                │  validate_intelligence.py (+ cross-dim invariants)
+                               ├─ Step 2.5b Scenario Edge Discovery (10 dims → scenario-edges.json)
+                               │            (parallel w/ 2.6; may_inject_flow → Step 3)
                                ▼  Step 2.6  Aesthetic Direction (138-brand library)
                     ┌─────────────────────────────┐
                     │  aesthetic.json             │  pick system/archetype → tokens
@@ -133,7 +150,15 @@ bash run_pipeline.sh --draft ./output/design-first-draft.md --ds ../looloo-desig
 
 ---
 
-## Step 1+2 — TOR Reader & Brief Writer
+## Step 1+2 — Intake & Brief Writer
+
+> **Step 1.0 Intake (the hourglass waist)** generalises the *input*: not just a TOR but **any product
+> intent** — a PRD, a one-line idea, a redesign target, notes, analytics — all normalise into the same
+> `brief.json`, so the pipeline body never changes. Intake stays THIN (collect facts + name gaps; it does
+> not synthesise personas/JTBD — that's 2.3/2.5). It sets `meta.input_type` + a confidence floor
+> (`meta.tor_confidence`; a one-line idea = `low` → `constrain_downstream`) and runs a 4-way completeness
+> gate that asks the user **only** the prototype-critical fields it can't safely infer. Full contract:
+> **`references/intake-layer.md`**.
 
 ### Input
 
@@ -143,13 +168,18 @@ bash run_pipeline.sh --draft ./output/design-first-draft.md --ds ../looloo-desig
 | DOCX | `docx` skill → `python-docx` |
 | Notion URL | Notion MCP: `notion-fetch` |
 | Google Docs URL | Google Drive MCP: `read_file_content` |
-| Plain text | Read from the `--tor-text` flag or the conversation |
+| Plain text / any intent | Read from the `--tor-text` / `--intent` flag or the conversation |
 
 No input → halt immediately:
 ```
-[designops-pipeline] ERROR: no TOR input found
-Specify with --tor <path> or --tor-text "<text>"
+[designops-pipeline] ERROR: no product intent found
+Specify with --tor <path>, --tor-text "<text>", or --intent "<text>"
 ```
+
+**4-way gate (per required field):** present → use (stated) · safely inferable → infer + an
+`open_question` · critical + unguessable → **ask** (batch, grouped, skippable, one follow-up round) ·
+admin (budget / file formats / procurement) → skip. Ask to *sufficiency*, not completeness; never
+fabricate a fact — an unknown critical field is `null` + an `open_question`.
 
 ---
 
@@ -633,6 +663,11 @@ Instead of scaffolding empty screens, assemble from ready-made patterns so it's 
 **Mock data rule:** must be realistic to the domain — real names, real IDs/record numbers, real document numbers · **never** "User 1" / "Lorem ipsum"
 Drive density/safeguards/navigation/a11y from `intelligence.json` → `design_directives` (Step 2.5), not from a fixed preset.
 
+**Asset-prep (imagery):** for each `screen-inventory.json` `image_needs[]`, source a **free-license** image
+(Unsplash/Pexels), place it via `next/image` with `alt`, and record `sourced { source_url, license,
+attribution, alt }` — the gate blocks a sourced need missing provenance or alt. Flat/utility screens
+declare no imagery. Mind the Tailwind v4 binary-scan guard. Full contract: `references/image-sourcing.md`.
+
 ### Import the DS package (Model A)
 
 The build **imports** `@npsin-oreo/design-system` — it never copies a DS. `GITHUB_TOKEN` is required
@@ -1009,8 +1044,10 @@ If BLOCKED → loop back, fix per the report, and re-audit until it passes befor
 
 Runs on `out/index.html` (after `npm run build`): **axe-core** WCAG A/AA (button/link names, image alt,
 `lang`, `<title>`, ARIA, landmarks, heading order), **hover/focus-state contrast** (`verify_states`),
-modal **focus-trap** (`verify_focustrap`, when a trigger selector is given), plus a render-based
-**anti-slop** report (`taste_audit`, advisory). Blocking gates exit 1.
+modal **focus-trap** (`verify_focustrap`, when a trigger selector is given), a render-based **anti-slop**
+report (`taste_audit`, advisory), plus a **geometry + universal-design** report (`geometry_audit`,
+advisory): off-4px-grid spacing, WCAG 2.2 §2.5.8 target size (<24px), tiny text, optical misalignment,
+component metric drift (`--strict` makes a sub-24px target a hard fail). Blocking gates exit 1.
 ```bash
 # inside output/prototype after build — see references/runtime-audit/README.md
 node scripts/runtime/audit_runtime.mjs out/index.html [--dark] [--open=<sel> --dialog=<sel>]
@@ -1020,9 +1057,11 @@ fails contrast — none of which the static gate can see.
 
 ---
 
-## Step 4.8 — Storybook QA layer (optional)
+## Step 4.7c — Storybook QA layer (optional)
 
 > Opt-in. Off by default (Storybook + Playwright + Vitest are heavy; default prototype builds stay fast).
+> Numbered **4.7c** (an automated audit rung after 4.7b runtime audit) — distinct from the human-facing
+> **Step 4.8 Usability Test**, which runs later on the built prototype.
 > Template + exact enable steps: `references/storybook/README.md`. Lives in the **built prototype** (`output/prototype/`), never in the imported `@npsin-oreo/design-system` package.
 
 Adds a component explorer + **`@storybook/addon-a11y`** (axe-core on every rendered story — a runtime
@@ -1033,6 +1072,23 @@ you want per-component state coverage or a CI a11y gate:
 npm run gen:stories && npm run test-storybook   # headless axe pass
 npm run storybook                                # interactive explorer at :6006
 ```
+
+---
+
+## Step 4.9 — Feedback Loop (test → prototype N+1)
+
+> Turns real test feedback into the next prototype's scored work-list → `test-findings.json`.
+> Full contract: **`references/feedback-loop.md`**. Validate with `scripts/validate_test_findings.py`.
+
+This is what makes the pipeline a **loop**, not a one-shot. For each finding: **de-solutionise** it (the
+underlying problem, not the user's proposed fix), classify **observed vs stated** (behaviour > opinion),
+judge the signal into a **verdict** (`systemic` cross-segment · `segment` · `individual` n=1), and score
+`priority_score = severity × reach × confidence_weight`. Take the top-N in budget as `fix_now`
+(→ `target_iteration`); backlog the rest — don't fix everything. A `fix_now` feeds the next brief
+(progressive enrichment); a finding whose `maps_to` resolves to a prior hypothesis upgrades that upstream
+item **inferred → evidence** (real contact finally grounds the guess). Stop when the round is all
+cosmetic/minor or new findings dry up (`dry_rounds ≥ 2`). `real_user` feedback is evidence;
+`simulated_4.8` stays a hypothesis.
 
 ---
 
