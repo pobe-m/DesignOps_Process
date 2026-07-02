@@ -481,6 +481,17 @@ python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/scenario_edges_bad.json"
 python3 -c "import json;d=json.load(open('$TMP/scenario_edges.json'));d['scenario_edges'][0]['task_ref']='T99';json.dump(d,open('$TMP/scenario_edges_ref.json','w'))"
 python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/scenario_edges_ref.json" "$TMP/intel_min.json" >/dev/null 2>&1 && bad "unresolved task_ref should fail" || ok "scenario edge ref resolves into intelligence → exit 1 (BLOCKED)"
 
+# feedback loop (4.9) — valid scored findings; score-math mismatch fails; systemic needs reach ≥ 2
+cat > "$TMP/test_findings.json" <<'JSON'
+{ "meta": { "schema_version": "1.0", "iteration": 1, "test_method": "real_user", "convergence": { "new_this_round": 1, "dry_rounds": 0 } },
+  "findings": [{ "id": "FD01", "raw": "r", "type": "observed", "problem_statement": "operators can't find a guest by name", "maps_to": null, "severity": 2, "reach": 2, "confidence": "high", "priority_score": 12, "verdict": "systemic", "decision": "fix_now", "target_iteration": 2 }] }
+JSON
+python3 "$SCRIPTS_DIR/validate_test_findings.py" "$TMP/test_findings.json" >/dev/null 2>&1 && ok "valid test-findings (scored) → exit 0" || bad "valid test-findings should pass"
+python3 -c "import json;d=json.load(open('$TMP/test_findings.json'));d['findings'][0]['priority_score']=99;json.dump(d,open('$TMP/tf_score.json','w'))"
+python3 "$SCRIPTS_DIR/validate_test_findings.py" "$TMP/tf_score.json" >/dev/null 2>&1 && bad "wrong priority_score should fail" || ok "priority_score = severity×reach×confidence enforced → exit 1 (BLOCKED)"
+python3 -c "import json;d=json.load(open('$TMP/test_findings.json'));d['findings'][0]['reach']=1;d['findings'][0]['priority_score']=6;json.dump(d,open('$TMP/tf_sys.json','w'))"
+python3 "$SCRIPTS_DIR/validate_test_findings.py" "$TMP/tf_sys.json" >/dev/null 2>&1 && bad "systemic with reach 1 should fail" || ok "systemic verdict needs reach ≥ 2 → exit 1 (BLOCKED)"
+
 # ── T13. setup-prototype — Model A import-only (no vendored/rsync path) ────────
 echo "[T13] setup-prototype — import-only (no copy/rsync, token hard-required)"
 SETUP="$SCRIPTS_DIR/setup-prototype.sh"

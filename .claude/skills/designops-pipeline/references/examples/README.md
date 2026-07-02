@@ -10,6 +10,7 @@ generate against.
 | `competitive.example.json` | Competitive Analysis · 2.4 | **inferred** — no competitor data given → market hypotheses; one `convention:"break"` with a reason |
 | `usability.example.json` | Usability Test · 4.8 | simulated — `not_real_user_testing:true`, automated finding cites an axe rule, persona walkthrough `simulated:true` |
 | `scenario-edges.example.json` | Scenario Edge · 2.5b | severity driven by directives (`error_tolerance:low` → must); 3 edges inject a flow into Step 3; one low-confidence must carries an `open_question` |
+| `test-findings.example.json` | Feedback Loop · 4.9 | `real_user`; `priority_score = severity×reach×confidence`; a systemic fix_now (`maps_to:PP01`, upgrades the hypothesis), a segment backlog, an individual won't_fix |
 
 Validate:
 
@@ -20,6 +21,7 @@ python3 $S/validate_interviews.py  $E/interviews.example.json $E/research.exampl
 python3 $S/validate_competitive.py $E/competitive.example.json
 python3 $S/validate_usability.py   $E/usability.example.json $E/research.example.json
 python3 $S/validate_scenario_edges.py $E/scenario-edges.example.json   # + optional intelligence.json to enforce refs/floors
+python3 $S/validate_test_findings.py  $E/test-findings.example.json $E/research.example.json
 ```
 
 ## inferred → hybrid → evidence_backed (ingest)

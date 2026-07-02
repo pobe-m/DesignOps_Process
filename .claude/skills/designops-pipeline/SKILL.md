@@ -34,6 +34,9 @@ description: >
   — nothing is marked evidence without a declared input, and neither the interview nor the usability layer
   claims a real-user test. Step 2.5 also enforces a coverage invariant: every user_type traces back to a
   2.3 persona (persona_ref), so no audience is invented or dropped between research and intelligence.
+  Step 4.9 (Feedback Loop → test-findings.json) closes the loop: it de-solutionises real test feedback,
+  scores it (severity × reach × confidence; observed > stated; systemic vs individual), fixes the top-N
+  into the next prototype, and grades the upstream hypotheses inferred → evidence — build → test → repeat.
 ---
 
 # designops-pipeline
@@ -1069,6 +1072,23 @@ you want per-component state coverage or a CI a11y gate:
 npm run gen:stories && npm run test-storybook   # headless axe pass
 npm run storybook                                # interactive explorer at :6006
 ```
+
+---
+
+## Step 4.9 — Feedback Loop (test → prototype N+1)
+
+> Turns real test feedback into the next prototype's scored work-list → `test-findings.json`.
+> Full contract: **`references/feedback-loop.md`**. Validate with `scripts/validate_test_findings.py`.
+
+This is what makes the pipeline a **loop**, not a one-shot. For each finding: **de-solutionise** it (the
+underlying problem, not the user's proposed fix), classify **observed vs stated** (behaviour > opinion),
+judge the signal into a **verdict** (`systemic` cross-segment · `segment` · `individual` n=1), and score
+`priority_score = severity × reach × confidence_weight`. Take the top-N in budget as `fix_now`
+(→ `target_iteration`); backlog the rest — don't fix everything. A `fix_now` feeds the next brief
+(progressive enrichment); a finding whose `maps_to` resolves to a prior hypothesis upgrades that upstream
+item **inferred → evidence** (real contact finally grounds the guess). Stop when the round is all
+cosmetic/minor or new findings dry up (`dry_rounds ≥ 2`). `real_user` feedback is evidence;
+`simulated_4.8` stays a hypothesis.
 
 ---
 
