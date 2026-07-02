@@ -68,6 +68,13 @@ python3 "$VALIDATE" "$TMP/no_features.json" >/dev/null 2>&1 && bad "missing core
 # bad priority
 python3 -c "import json;d=json.load(open('$TMP/valid.json'));d['core_features'][0]['priority']='Urgent';json.dump(d,open('$TMP/bad_prio.json','w'))"
 python3 "$VALIDATE" "$TMP/bad_prio.json" >/dev/null 2>&1 && bad "bad priority should fail" || ok "invalid priority → exit 1"
+# intake (Step 1.0): valid input_type passes; bad enum fails; thin idea claiming high confidence fails
+python3 -c "import json;d=json.load(open('$TMP/valid.json'));d['meta']['input_type']='idea';d['meta']['tor_confidence']='low';json.dump(d,open('$TMP/intake_ok.json','w'))"
+python3 "$VALIDATE" "$TMP/intake_ok.json" >/dev/null 2>&1 && ok "intake input_type=idea + low confidence → exit 0" || bad "valid intake brief should pass"
+python3 -c "import json;d=json.load(open('$TMP/valid.json'));d['meta']['input_type']='napkin';json.dump(d,open('$TMP/intake_bad.json','w'))"
+python3 "$VALIDATE" "$TMP/intake_bad.json" >/dev/null 2>&1 && bad "bad input_type should fail" || ok "invalid input_type enum → exit 1"
+python3 -c "import json;d=json.load(open('$TMP/valid.json'));d['meta']['input_type']='idea';d['meta']['tor_confidence']='high';json.dump(d,open('$TMP/intake_lie.json','w'))"
+python3 "$VALIDATE" "$TMP/intake_lie.json" >/dev/null 2>&1 && bad "thin idea + high confidence should fail" || ok "idea input requires low confidence floor → exit 1"
 
 # ── T4. agent-driven prep mode: stages prompts, no recursion ──────────────────
 echo "[T4] execution model — prep mode stages, no recursion"

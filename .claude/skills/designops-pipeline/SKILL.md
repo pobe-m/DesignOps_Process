@@ -8,6 +8,9 @@ description: >
   "brief requirement from TOR", "designops-pipeline", "tor-to-brief" (the former name),
   "drop a TOR", "design brief from spec", or wants the AI to read a spec/scope document and produce
   a design requirement or prototype. Supports PDF, DOCX, and Notion/Google Docs URLs.
+  Step 1.0 (Intake — the hourglass waist) generalises the input beyond a TOR: any product intent (a PRD,
+  a one-line idea, a redesign target, notes, analytics) normalises into the same brief.json via a thin
+  4-way completeness gate that sets a confidence floor and asks only the prototype-critical gaps.
   In Claude Code, run `scripts/run_pipeline.sh` to chain the full pipeline automatically.
   Step 2.5 (Product Intelligence Layer) infers 10 measurable product dimensions and derives an
   open design_directives object (density, a11y target, safeguards, navigation) — industry-agnostic.
@@ -138,7 +141,15 @@ bash run_pipeline.sh --draft ./output/design-first-draft.md --ds ../looloo-desig
 
 ---
 
-## Step 1+2 — TOR Reader & Brief Writer
+## Step 1+2 — Intake & Brief Writer
+
+> **Step 1.0 Intake (the hourglass waist)** generalises the *input*: not just a TOR but **any product
+> intent** — a PRD, a one-line idea, a redesign target, notes, analytics — all normalise into the same
+> `brief.json`, so the pipeline body never changes. Intake stays THIN (collect facts + name gaps; it does
+> not synthesise personas/JTBD — that's 2.3/2.5). It sets `meta.input_type` + a confidence floor
+> (`meta.tor_confidence`; a one-line idea = `low` → `constrain_downstream`) and runs a 4-way completeness
+> gate that asks the user **only** the prototype-critical fields it can't safely infer. Full contract:
+> **`references/intake-layer.md`**.
 
 ### Input
 
@@ -148,13 +159,18 @@ bash run_pipeline.sh --draft ./output/design-first-draft.md --ds ../looloo-desig
 | DOCX | `docx` skill → `python-docx` |
 | Notion URL | Notion MCP: `notion-fetch` |
 | Google Docs URL | Google Drive MCP: `read_file_content` |
-| Plain text | Read from the `--tor-text` flag or the conversation |
+| Plain text / any intent | Read from the `--tor-text` / `--intent` flag or the conversation |
 
 No input → halt immediately:
 ```
-[designops-pipeline] ERROR: no TOR input found
-Specify with --tor <path> or --tor-text "<text>"
+[designops-pipeline] ERROR: no product intent found
+Specify with --tor <path>, --tor-text "<text>", or --intent "<text>"
 ```
+
+**4-way gate (per required field):** present → use (stated) · safely inferable → infer + an
+`open_question` · critical + unguessable → **ask** (batch, grouped, skippable, one follow-up round) ·
+admin (budget / file formats / procurement) → skip. Ask to *sufficiency*, not completeness; never
+fabricate a fact — an unknown critical field is `null` + an `open_question`.
 
 ---
 

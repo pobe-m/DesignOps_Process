@@ -62,6 +62,7 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     --tor)       TOR_FILE="$2";  shift 2 ;;
     --tor-text)  TOR_TEXT="$2";  shift 2 ;;
+    --intent)    TOR_TEXT="$2";  shift 2 ;;   # any product intent (PRD / one-line idea / redesign / notes) — intake generalises it → brief.json
     --ds)        DS_PATH="$2";   shift 2 ;;
     --brief)     BRIEF_JSON="$2"; shift 2 ;;
     --out)       OUT_DIR="$2";   shift 2 ;;
@@ -103,6 +104,7 @@ if [[ -z "$TOR_FILE" && -z "$TOR_TEXT" && -z "$BRIEF_JSON" ]]; then
   err "you must provide at least one input:
   --tor <path>        TOR file (PDF or DOCX)
   --tor-text \"<text>\" TOR text directly
+  --intent \"<text>\"   any product intent (PRD / one-line idea / redesign / notes) — intake generalises it
   --brief <path>      skip steps 1+2, use an existing brief.json"
 fi
 
@@ -168,18 +170,29 @@ except Exception as e:
   # Write prompt file for Claude Code to execute
   PROMPT_FILE="$OUT_DIR/.prompt_step1.txt"
   cat > "$PROMPT_FILE" << PROMPT
-Read the TOR below and produce 2 output files per the designops-pipeline SKILL.md:
+Read the product intent below and produce 2 output files per the designops-pipeline SKILL.md:
 
 1. Save "$OUT_DIR/brief.md" — Markdown for humans to review
 2. Save "$OUT_DIR/brief.json" — JSON schema for the AI to consume next
 
+INTAKE (the hourglass waist — see $SKILL_DIR/references/intake-layer.md): the input may be a TOR, a
+PRD, a one-line idea, a redesign target, notes, or analytics. Run intake as a THIN normaliser — collect
+stated facts, do NOT synthesise personas/JTBD (that is 2.3/2.5's job).
+- Set meta.input_type (tor|prd|redesign|notes|analytics|idea|mixed) and meta.source_file (origin).
+- Set meta.tor_confidence from how much is grounded (a one-line idea = "low" → constrain_downstream;
+  a full TOR/PRD = "high"). Record meta.intake { asked, inferred, skipped }.
+- 4-WAY GATE per required field: present → use; safely inferable → infer + an open_question; critical +
+  unguessable → ASK the user (batch, grouped, skippable, one follow-up round max); admin (budget /
+  file formats / procurement / committee) → skip. Ask ONLY the critical+unguessable bucket. Ask to
+  sufficiency, not completeness. NEVER fabricate — an unknown critical field is null + an open_question.
+
 Use the 8 main categories: PROJECT_OVERVIEW, TARGET_USERS, CORE_FEATURES, USER_FLOWS,
 CONSTRAINTS, DESIGN_DIRECTION, SUCCESS_METRICS, OPEN_QUESTIONS
 
-If the TOR doesn't state a category → set null, don't make it up.
+If the intent doesn't state a category → set null, don't make it up.
 A feature with no priority → default to Should.
 
-TOR content:
+Product intent content:
 ---
 $TOR_CONTEXT
 ---
