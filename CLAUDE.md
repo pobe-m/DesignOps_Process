@@ -1,36 +1,41 @@
 # CLAUDE.md
 # Place this file at the root of any project that uses the designops-pipeline skill
 
-## Environment — Model A (imports the looloo design system)
+## Environment — bring your own design system (two models)
 
-This pipeline is a **consumer** of `@npsin-oreo/design-system` (the looloo design system). It does
-**not** vendor a DS — the build **imports the published package** into `output/prototype/node_modules`
-and imports components from `@npsin-oreo/design-system/<name>` (immutable; theme via Step 2.6 token +
-`[data-slot=*]` overrides, never by editing components). **Not standalone — needs a `GITHUB_TOKEN`**
-(GitHub Packages requires auth even for public packages).
+The pipeline itself is pure stdlib/bash; the only external piece is the DS. **Model B (recommended)** is
+self-contained — no registry, no token.
+
+**Model B — build off a local shadcn checkout.** Point `--ds` / `--ds-src` at your DS source (a Next app
+with `components/ui` + tokens + `globals.css`, e.g. `../shadcn-skills-design`). `setup-prototype.sh` copies
+it into `output/prototype` and runs a plain `npm install` of its **public** deps. Components are the DS's
+own `components/ui/*` (editable), imported via `@/components/ui/<name>`; theme via Step 2.6
+`brand.config.json` appended to `globals.css`.
 
 | Path | Role | When used |
 |------|------|-----------|
-| `@npsin-oreo/design-system` (npm, GitHub Packages) | **DS — imported package**, pinned + `--save-exact` | Step 4 build (`setup-prototype.sh`) |
-| `../looloo-design-system` (sibling checkout) | **DS source** — read for component inventory + `token-contract.json` + DESIGN.md only | Step 2.6 / 3.5 (`--ds`) |
+| your shadcn DS source (e.g. `../shadcn-skills-design`) | **DS source** — component inventory (3.5) **and** the Model-B build base (4) | `--ds` (inventory) · `--ds-src` (build) |
 
 > Theming is owned by Step 2.6 → `brand.config.json` → the product scaffold. The old `--handoff`
 > Step 4.5 token-bridge (pushing tokens into a whitelabel repo) is **deprecated** and not part of this flow.
 
-`run_pipeline.sh` resolves `--ds` (the looloo SOURCE, for inventory): `TOR_DS_PATH` env → `../looloo-design-system` sibling.
+`run_pipeline.sh` resolves `--ds`: `TOR_DS_PATH` env → a `../shadcn-skills-design` sibling.
 
 ```bash
-export GITHUB_TOKEN=$(gh auth token)   # required — import the DS package from GitHub Packages
-
-# Core pipeline (DS inventory from the looloo source; build imports the package)
+# Core pipeline (component inventory from your DS source) — no GITHUB_TOKEN for Model B
 bash .claude/skills/designops-pipeline/scripts/run_pipeline.sh \
   --tor docs/tor.pdf \
-  --ds  ../looloo-design-system \
+  --ds  ../shadcn-skills-design \
   --out ./output
+
+# Step 4 build base (Model B — copies the DS in, installs its public deps, no token)
+bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out ./output --ds-src ../shadcn-skills-design
 ```
 
-> Note: the DS is never copied. `setup-prototype.sh --out ./output` installs the pinned package into
-> `output/prototype/node_modules`, scaffolds an importing Next app + `.npmrc`, and a local `lib/utils.ts` (`cn`).
+> **Model A (legacy)** — to import a *published* DS package instead: `export GITHUB_TOKEN=$(gh auth token)`
+> then `setup-prototype.sh --out ./output --ds-pkg @scope/design-system@x.y.z` (installs a pinned package
+> into `node_modules`, scaffolds an importing Next app + `.npmrc`; components import from
+> `@scope/design-system/<name>`, immutable).
 
 ---
 

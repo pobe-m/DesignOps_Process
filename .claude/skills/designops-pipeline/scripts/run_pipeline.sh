@@ -17,15 +17,14 @@
 #   Headless:       run_pipeline.sh --tor <path> --exec        # outside Claude Code only
 #
 #   DEPRECATED:     --handoff <repo> [--brand <name>]   # legacy Step 4.5 token-bridge
-#     Pushes tokens INTO a whitelabel target repo and rebuilds its brand.css. Under the
-#     current Model A (DS = @npsin-oreo/design-system, theming via Step 2.6 → product scaffold)
-#     this is no longer part of the flow. Kept for back-compat ONLY for a repo that still
-#     ships brand.config.json + `npm run brand:build`. Do NOT point it at the DS repo.
+#     Pushes tokens INTO a whitelabel target repo and rebuilds its brand.css. Theming is owned by
+#     Step 2.6 → the product scaffold, so this is no longer part of the flow. Kept for back-compat
+#     ONLY for a repo that still ships brand.config.json + `npm run brand:build`. Not the DS repo.
 #
 # Env vars:
 #   TOR_OUTPUT_DIR    — output directory (default: ./tor-output)
-#   TOR_DS_PATH       — looloo design-system SOURCE checkout for inventory/token-contract/DESIGN.md
-#                       (default: ../looloo-design-system). The BUILD imports the published package.
+#   TOR_DS_PATH       — your shadcn DS SOURCE checkout for the component inventory (Step 3.5)
+#                       (default: ../shadcn-skills-design). Reuse the same path as setup-prototype --ds-src.
 #   TOR_HANDOFF_PATH  — (deprecated) whitelabel repo path for the legacy token-bridge
 #   TOR_BRAND_NAME    — brand name for the legacy bridge's brand.config.json (default: poc-brand)
 
@@ -35,14 +34,14 @@ set -euo pipefail
 TOR_FILE=""
 TOR_TEXT=""
 DS_PATH=""
-# Model A: --ds is the looloo design-system SOURCE checkout — read ONLY for the component inventory
-# (Step 3.5) + token-contract.json + DESIGN.md (Step 2.6). The BUILD imports the *published* package
-# (@npsin-oreo/design-system) via setup-prototype; the DS is never copied. Lookup: env → sibling checkout.
+# --ds is your shadcn DS SOURCE checkout — read ONLY for the component inventory (Step 3.5) +
+# any token-contract.json + DESIGN.md (Step 2.6). The Model-B build reuses this same source via
+# setup-prototype --ds-src (copied in, no token). Lookup: TOR_DS_PATH env → sibling checkout.
 _resolve_default_ds() {
   [[ -n "${TOR_DS_PATH:-}" ]] && { echo "$TOR_DS_PATH"; return; }
   local project_root sibling
   project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
-  sibling="$(cd "$project_root" && cd .. && pwd)/looloo-design-system"
+  sibling="$(cd "$project_root" && cd .. && pwd)/shadcn-skills-design"
   [[ -d "$sibling" ]] && { echo "$sibling"; return; }
   echo ""
 }
@@ -382,14 +381,14 @@ fi
 # prototype a real look instead of the neutral shadcn default ("design slop").
 AESTHETIC_JSON="$OUT_DIR/aesthetic.json"
 AESTHETICS_DIR="$SKILL_DIR/references/aesthetics"
-# Optional DS token contract (Model A): if present, Step 2.6 may only theme tokens the DS
-# exposes. From TOR_DS_CONTRACT, else an installed @npsin-oreo/design-system, else the
-# resolved DS dir (vendored or --ds). Unset → unchanged (back-compatible).
+# Optional DS token contract: if the DS ships a token-contract.json, Step 2.6 may only theme the
+# tokens it exposes. From TOR_DS_CONTRACT, else the --ds source dir, else a Model-A published
+# package under node_modules. Unset (Model B without a contract) → unchanged (back-compatible).
 DS_CONTRACT="${TOR_DS_CONTRACT:-}"
 if [[ -z "$DS_CONTRACT" ]]; then
-  for _c in "$OUT_DIR/prototype/node_modules/@npsin-oreo/design-system/token-contract.json" \
-            "./node_modules/@npsin-oreo/design-system/token-contract.json" \
-            ${DS_PATH:+"$DS_PATH/token-contract.json"}; do
+  for _c in ${DS_PATH:+"$DS_PATH/token-contract.json"} \
+            "$OUT_DIR/prototype/token-contract.json" \
+            "$OUT_DIR"/prototype/node_modules/@*/design-system/token-contract.json; do
     [[ -f "$_c" ]] && DS_CONTRACT="$_c" && break
   done
 fi
@@ -719,9 +718,9 @@ PROMPT
   fi
 
 else
-  log "no looloo design-system source found → skipping Step 3.5 (screen inventory)"
-  log "Point --ds (or TOR_DS_PATH) at a looloo-design-system checkout, then re-run:"
-  log "  run_pipeline.sh --brief $BRIEF_JSON --ds ../looloo-design-system --out $OUT_DIR"
+  log "no shadcn DS source found → skipping Step 3.5 (screen inventory)"
+  log "Point --ds (or TOR_DS_PATH) at a shadcn-skills-design checkout, then re-run:"
+  log "  run_pipeline.sh --brief $BRIEF_JSON --ds ../shadcn-skills-design --out $OUT_DIR"
 fi
 
 # ── step 4.5 (DEPRECATED): token bridge → whitelabel repo ────────────────────
