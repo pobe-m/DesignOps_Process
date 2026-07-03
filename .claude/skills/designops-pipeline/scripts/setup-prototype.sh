@@ -1,20 +1,25 @@
 #!/usr/bin/env bash
-# setup-prototype.sh — Step 4 base setup (Model A: IMPORT the design system as a package).
+# setup-prototype.sh — Step 4 base setup. Two models:
 #
-# This pipeline is a CONSUMER of @npsin-oreo/design-system (the looloo design system). It never
-# vendors/copies the DS — it installs the published package and imports components from it. The DS
-# lives in node_modules and is IMMUTABLE: customise via brand-scoped [data-slot=*] rules + token
-# overrides in globals.css (Step 2.6 theme), never by editing components.
+#   Model B (--ds-src <local shadcn checkout>) — RECOMMENDED, self-contained.
+#     The DS source repo (a shadcn Next app: components/ui + tokens + globals.css) IS the prototype
+#     base — copied in, then `npm install` pulls its OWN public deps. No package import, no GitHub
+#     Packages, no GITHUB_TOKEN. Screens import components via @/components/ui/<name>.
+#       bash setup-prototype.sh --out ./output --ds-src ../shadcn-skills-design
 #
-#   export GITHUB_TOKEN=$(gh auth token)   # GitHub Packages requires auth, even for public packages
-#   bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out ./output
-#                                        [--ds-pkg @npsin-oreo/design-system@0.3.0] [--ds-name …] [--ds-registry …]
+#   Model A (--ds-pkg @scope/pkg) — legacy, IMPORTS a published DS package from a registry.
+#     Never copies the DS; installs the package + imports from it. A scoped GitHub-Packages install
+#     hard-requires a token:
+#       export GITHUB_TOKEN=$(gh auth token)   # GitHub Packages requires auth, even for public packages
+#       bash setup-prototype.sh --out ./output [--ds-pkg @npsin-oreo/design-system@0.3.0] [--ds-name …] [--ds-registry …]
 #
+# Set SKIP_INSTALL=1 to scaffold/copy without running npm install (install yourself later).
 # bash 3.2 safe.
 
 set -uo pipefail
 
 OUT="./output"
+DS_SRC=""              # Model B: local shadcn DS checkout to copy in (no package import, no token)
 # Pinned default DS version (security: never float to `latest` — a republished/compromised `latest`
 # would flow straight into builds). Bump this when adopting a new published DS release.
 DS_VERSION="0.3.0"
@@ -28,6 +33,7 @@ DS_REGISTRY="https://npm.pkg.github.com"
 while [ $# -gt 0 ]; do
   case "$1" in
     --out)         OUT="$2"; shift 2 ;;
+    --ds-src)      DS_SRC="$2"; shift 2 ;;          # Model B: local shadcn DS checkout (copied in; no token)
     --ds-pkg)      IMPORT_PKG="$2"; shift 2 ;;      # install spec (name@version or path/tarball)
     --ds-name)     DS_NAME="$2"; shift 2 ;;         # bare name for CSS (needed if --ds-pkg is a tarball/path)
     --ds-registry) DS_REGISTRY="$2"; shift 2 ;;     # registry for the DS scope ("" = public npm, no .npmrc)
@@ -51,9 +57,72 @@ err() { echo "[setup-prototype] ERROR: $*" >&2; exit 1; }
 
 command -v npm >/dev/null 2>&1 || err "npm required"
 PROTO="$OUT/prototype"
+
+# ── Model B: copy a local shadcn DS source AS the prototype base ────────────────
+# The DS repo is itself a runnable Next app (components/ui + tokens + globals.css). The prototype =
+# a copy of it + generated screens. Its deps are public npm (next/react/radix/shadcn) → a plain
+# `npm install` with NO .npmrc, NO scope, NO GITHUB_TOKEN. Fully self-contained.
+if [ -n "$DS_SRC" ]; then
+  [ -d "$DS_SRC" ] || err "--ds-src '$DS_SRC' is not a directory"
+  { [ -d "$DS_SRC/components/ui" ] || [ -d "$DS_SRC/components" ]; } || err "--ds-src '$DS_SRC' has no components/ (not a shadcn source)"
+  [ -f "$DS_SRC/package.json" ] || err "--ds-src '$DS_SRC' has no package.json (not a runnable app)"
+  log "Model B (local shadcn): copying DS source '$DS_SRC' → $PROTO (no package import, no token)"
+  mkdir -p "$PROTO"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --exclude '.git' --exclude 'node_modules' --exclude '.next' --exclude 'out' "$DS_SRC"/ "$PROTO"/ \
+      || err "copy (rsync) failed from '$DS_SRC'"
+  else
+    ( cd "$DS_SRC" && tar --exclude='./.git' --exclude='./node_modules' --exclude='./.next' --exclude='./out' -cf - . ) \
+      | ( cd "$PROTO" && tar -xf - ) || err "copy (tar) failed from '$DS_SRC'"
+  fi
+
+  # cn() helper (shadcn standard) — ensure it exists even if the DS didn't ship one
+  if [ ! -f "$PROTO/lib/utils.ts" ] && [ ! -f "$PROTO/src/lib/utils.ts" ]; then
+    mkdir -p "$PROTO/lib"
+    cat > "$PROTO/lib/utils.ts" <<'TS'
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+export function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)); }
+TS
+    log "added lib/utils.ts (cn helper) — DS source didn't ship one"
+  fi
+
+  # Tailwind v4 binary-scan guards + the marker Step 2.6 appends the brand theme after
+  CSS=""
+  for c in "$PROTO/app/globals.css" "$PROTO/src/app/globals.css" "$PROTO/styles/globals.css"; do
+    [ -f "$c" ] && CSS="$c" && break
+  done
+  if [ -n "$CSS" ]; then
+    if ! grep -q '@source not "../public"' "$CSS" 2>/dev/null; then
+      cat >> "$CSS" <<'CSS'
+
+/* --- pipeline: Tailwind v4 binary-scan guards (v4 reads public/ webp/png as text → Turbopack 500) --- */
+@source not "../public";
+@source not "../.next";
+/* --- Step 2.6 brand.config theme (:root/.dark + @theme) is appended below this line --- */
+CSS
+      log "appended Tailwind guards + Step 2.6 theme marker → $CSS"
+    fi
+  else
+    log "⚠ no globals.css found in the DS source — wire Step 2.6 theme + @source guards manually"
+  fi
+
+  if [ "${SKIP_INSTALL:-0}" = "1" ]; then
+    log "SKIP_INSTALL=1 → skipping npm install (run 'cd $PROTO && npm install' yourself)"
+  else
+    log "Installing the DS source's own deps (public npm — no scope, no .npmrc, no token)…"
+    ( cd "$PROTO" && npm install --no-audit --no-fund ) \
+      || err "npm install failed in the copied DS — confirm $PROTO/package.json deps are all public (no @private scope)"
+  fi
+  log "✓ prototype ready (Model B) → $PROTO — built FROM your local shadcn DS, no package import, no token"
+  log "  components live at $PROTO/components/ui/* → screens import via @/components/ui/<name>"
+  log "  add screens under $PROTO/app, then: cd $PROTO && npm run dev"
+  exit 0
+fi
+
 mkdir -p "$PROTO/app" "$PROTO/lib"
 
-# ── scaffold a minimal, buildable Next product that IMPORTS the DS ──────────────
+# ── scaffold a minimal, buildable Next product that IMPORTS the DS (Model A) ─────
 [ -f "$PROTO/package.json" ] || cat > "$PROTO/package.json" <<JSON
 { "name": "prototype", "version": "0.0.0", "private": true,
   "scripts": { "dev": "next dev", "build": "next build" } }

@@ -492,13 +492,25 @@ python3 "$SCRIPTS_DIR/validate_test_findings.py" "$TMP/tf_score.json" >/dev/null
 python3 -c "import json;d=json.load(open('$TMP/test_findings.json'));d['findings'][0]['reach']=1;d['findings'][0]['priority_score']=6;json.dump(d,open('$TMP/tf_sys.json','w'))"
 python3 "$SCRIPTS_DIR/validate_test_findings.py" "$TMP/tf_sys.json" >/dev/null 2>&1 && bad "systemic with reach 1 should fail" || ok "systemic verdict needs reach ≥ 2 → exit 1 (BLOCKED)"
 
-# ── T13. setup-prototype — Model A import-only (no vendored/rsync path) ────────
-echo "[T13] setup-prototype — import-only (no copy/rsync, token hard-required)"
+# ── T13. setup-prototype — Model A (import, token) + Model B (local shadcn copy, no token) ──
+echo "[T13] setup-prototype — Model A import + Model B local-shadcn copy"
 SETUP="$SCRIPTS_DIR/setup-prototype.sh"
 bash -n "$SETUP" 2>/dev/null && ok "setup-prototype.sh parses (bash -n)" || bad "setup-prototype.sh syntax error"
-# import is the ONLY mode — the vendored/copy flags + rsync path must be GONE
-grep -q -- '--ds-auto' "$SETUP" || grep -q 'rsync' "$SETUP" && bad "vendored/rsync path still present (should be import-only)" || ok "no --ds-auto / rsync path (import-only)"
-grep -q '_authToken' "$SETUP" && grep -q 'DS_REGISTRY' "$SETUP" && ok "scaffold .npmrc (scope → registry) wired" || bad "scaffold .npmrc wiring missing"
+# Model A: still wires the scoped .npmrc (scope → registry, token auth)
+grep -q '_authToken' "$SETUP" && grep -q 'DS_REGISTRY' "$SETUP" && ok "Model A scaffold .npmrc (scope → registry) wired" || bad "Model A .npmrc wiring missing"
+# Model B: --ds-src copies a local shadcn DS as the base — no .npmrc, no token
+grep -q -- '--ds-src' "$SETUP" && ok "Model B --ds-src (local shadcn) path present" || bad "Model B --ds-src path missing"
+# functional: copy a tiny fixture DS → prototype, SKIP_INSTALL, assert self-contained (no token)
+FIX="$TMP/dsfix"; mkdir -p "$FIX/components/ui" "$FIX/app" "$FIX/lib"
+echo 'export const Button = () => null' > "$FIX/components/ui/button.tsx"
+echo '{ "name":"ds-fix","version":"0.0.0","dependencies":{"next":"16","react":"19"} }' > "$FIX/package.json"
+echo '@import "tailwindcss";' > "$FIX/app/globals.css"
+SKIP_INSTALL=1 bash "$SETUP" --out "$TMP/mb" --ds-src "$FIX" >/dev/null 2>&1
+P="$TMP/mb/prototype"
+{ [ -f "$P/components/ui/button.tsx" ] && [ ! -f "$P/.npmrc" ] && grep -q '@source not "../public"' "$P/app/globals.css"; } \
+  && ok "Model B copies DS + appends guards + no .npmrc (no token)" || bad "Model B copy/guards/no-token failed"
+# Model B rejects a non-shadcn dir
+SKIP_INSTALL=1 bash "$SETUP" --out "$TMP/mbx" --ds-src "$TMP" >/dev/null 2>&1 && bad "non-shadcn --ds-src should fail" || ok "Model B rejects a dir with no components/ → exit 1"
 # token is HARD-required (no fallback)
 grep -q 'GITHUB_TOKEN is required' "$SETUP" && grep -q 'NEEDS_TOKEN' "$SETUP" && ok "GITHUB_TOKEN hard-required (no fallback)" || bad "token requirement not enforced"
 # default pkg pinned to a published version + exact install

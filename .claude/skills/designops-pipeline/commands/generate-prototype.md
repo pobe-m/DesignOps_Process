@@ -1,8 +1,15 @@
 # /generate-prototype
 
-Generate a Next.js POC prototype from `design-first-draft.md` by **importing** the published
-`@npsin-oreo/design-system` (looloo) package — components come from `@npsin-oreo/design-system/<name>`
-(immutable, in `node_modules`); only the product's own `cn` lives at `@/lib/utils`.
+Generate a Next.js POC prototype from `design-first-draft.md` using a design system.
+
+> **Import convention — depends on the model (see Step 1a):**
+> - **Model B (local shadcn, recommended):** components come from **`@/components/ui/<name>`** (copied
+>   into the prototype, editable). This is the self-contained, token-free path.
+> - **Model A (legacy):** components come from `@scope/design-system/<name>` (immutable, in `node_modules`).
+>
+> The examples below are written in the Model-A form; **under Model B, replace every
+> `@npsin-oreo/design-system/<x>` (or any `@scope/design-system/<x>`) import with `@/components/ui/<x>`.**
+> The product's own `cn` always lives at `@/lib/utils`.
 
 **Usage:**
 ```
@@ -123,23 +130,31 @@ If not found → continue with neutral theme defaults, log:
 
 ### 1a. Prepare prototype base
 
-This pipeline is a **consumer** of `@npsin-oreo/design-system` (Model A) — it imports the published
-package, never copies it. The setup needs a `GITHUB_TOKEN` (GitHub Packages requires auth even for
-public packages):
+Two models — **prefer Model B** (self-contained, no token):
+
+**Model B (local shadcn DS) — recommended.** Point `--ds-src` at a local shadcn checkout (a Next app
+with `components/ui` + tokens + `globals.css`, e.g. `pobe-m/shadcn-skills-design`). The DS repo *is* the
+prototype base: it's copied in, then `npm install` pulls its own **public** deps. No package import, no
+GitHub Packages, no `GITHUB_TOKEN`. Screens import components via `@/components/ui/<name>`.
+
+```bash
+bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out ./output --ds-src ../shadcn-skills-design
+```
+
+**Model A (legacy) — imports a published DS package** from a registry. A scoped GitHub-Packages install
+hard-requires a token:
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
 bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out ./output
-# optional: --ds-pkg @npsin-oreo/design-system@0.2.0 (pin) · --ds-registry "" (public-npm/tarball)
+# optional: --ds-pkg @scope/design-system@X.Y.Z (pin) · --ds-registry "" (public-npm/tarball)
 ```
 
-- Installs the **pinned** DS package into `node_modules` (`--save-exact`), scaffolds a buildable Next
-  app that imports from it, writes `.npmrc` (scope → GitHub Packages), and creates `lib/utils.ts`
-  (`cn`, which the package does not export).
-- **Hard-requires `GITHUB_TOKEN`** — no token, no fallback (this is not standalone). Missing → the
-  script errors with the export command to run.
-- The DS in `node_modules` is **immutable**: customise via brand-scoped `[data-slot=*]` rules +
-  token overrides in `globals.css` (Step 2.6 theme), never by editing components.
+- **Model B:** copies the DS source → `output/prototype`, `npm install` (public deps, no `.npmrc`, no
+  token); components are the DS's own `components/ui/*`, editable, imported via `@/components/ui/<name>`.
+- **Model A:** installs the **pinned** package into `node_modules` (`--save-exact`), writes `.npmrc`
+  (scope → GitHub Packages), imports from `@scope/design-system/<name>`, and **hard-requires
+  `GITHUB_TOKEN`**. The package is immutable — customise via `[data-slot=*]` + token overrides only.
 - Keeps a **real** `node_modules` (never a symlink — a shared/symlinked one breaks tsc's `@types/react` resolution).
 
 ### 1b. Apply brand overrides (if brand.config.json exists)
