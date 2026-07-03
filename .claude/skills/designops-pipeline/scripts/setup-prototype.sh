@@ -107,6 +107,21 @@ CSS
     log "⚠ no globals.css found in the DS source — wire Step 2.6 theme + @source guards manually"
   fi
 
+  # Neutralise docs/static-site next.config settings that break a dynamic prototype. A DS repo built
+  # as a docs site often ships `output:"export"` (no server runtime) + `trailingSlash:true` (every
+  # route 308-redirects to add a slash) + `images:{unoptimized}`. Comment those out so the prototype
+  # runs as a normal Next app (dynamic routes, no 308s).
+  for NCFG in "$PROTO/next.config.ts" "$PROTO/next.config.mjs" "$PROTO/next.config.js"; do
+    [ -f "$NCFG" ] || continue
+    if grep -Eq 'output:[[:space:]]*"export"|trailingSlash:[[:space:]]*true' "$NCFG"; then
+      sed -e 's|\([[:space:]]*\)output:[[:space:]]*"export",|\1// output: "export",   // [pipeline] disabled for prototype (was docs-site static export)|' \
+          -e 's|\([[:space:]]*\)trailingSlash:[[:space:]]*true,|\1// trailingSlash: true,   // [pipeline] disabled for prototype (caused 308 redirects)|' \
+          "$NCFG" > "$NCFG.tmp" && mv "$NCFG.tmp" "$NCFG"
+      log "patched $(basename "$NCFG") — disabled docs-site output:export / trailingSlash (dynamic prototype, no 308s)"
+    fi
+    break
+  done
+
   if [ "${SKIP_INSTALL:-0}" = "1" ]; then
     log "SKIP_INSTALL=1 → skipping npm install (run 'cd $PROTO && npm install' yourself)"
   else
