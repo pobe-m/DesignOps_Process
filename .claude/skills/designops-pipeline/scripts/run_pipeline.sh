@@ -784,6 +784,14 @@ for f in brief.md brief.json design-first-draft.md; do
 done
 echo "════════════════════════════════════════"
 
+# ── Step 4 build hint — prefer Model B (local shadcn, no token) when --ds is a shadcn source ──
+if [[ -n "${DS_PATH:-}" && ( -d "$DS_PATH/components/ui" || -d "$DS_PATH/components" ) && -f "$DS_PATH/package.json" ]]; then
+  echo ""
+  log "Step 4 build (self-contained — no GITHUB_TOKEN): your --ds is a local shadcn source, so build Model B:"
+  echo "  bash $SKILL_DIR/scripts/setup-prototype.sh --out $OUT_DIR --ds-src $DS_PATH"
+  echo "  → copies the DS in, npm install (public deps), screens import via @/components/ui/<name>"
+fi
+
 # ── agent-driven handoff (default mode) ───────────────────────────────────────
 if [[ "$EXEC_MODE" != "1" && -s "$ACTIONS_FILE" ]]; then
   echo ""

@@ -668,15 +668,30 @@ Drive density/safeguards/navigation/a11y from `intelligence.json` → `design_di
 attribution, alt }` — the gate blocks a sourced need missing provenance or alt. Flat/utility screens
 declare no imagery. Mind the Tailwind v4 binary-scan guard. Full contract: `references/image-sourcing.md`.
 
-### Import the DS package (Model A)
+### Set up the prototype base — two models
 
-The build **imports** `@npsin-oreo/design-system` — it never copies a DS. `GITHUB_TOKEN` is required
-(GitHub Packages needs auth even for public packages):
+**Model B — local shadcn DS (recommended, self-contained).** Point `--ds-src` at a local shadcn
+checkout (a Next app with `components/ui` + tokens + `globals.css`). The DS repo *is* the prototype base:
+copied in, then `npm install` pulls its own **public** deps — **no package import, no GitHub Packages,
+no `GITHUB_TOKEN`.** Screens import components via `@/components/ui/<name>` (editable, in the prototype).
+
+```bash
+bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out {OUTPUT_DIR} --ds-src {DS_SRC}
+# e.g. --ds-src ../shadcn-skills-design   (SKIP_INSTALL=1 to copy without installing)
+```
+
+- Copies the DS source → `{OUTPUT_DIR}/prototype` (excludes `.git`/`node_modules`/`.next`/`out`),
+  ensures `lib/utils.ts` (`cn`), appends the Tailwind v4 `@source not` guards + a Step-2.6 theme marker
+  to `globals.css`, then `npm install` (no `.npmrc`, no scope, no token).
+- Components are the DS's own `components/ui/*` — **editable**, imported via `@/components/ui/<name>`.
+
+**Model A — import a published DS package (legacy).** The build **imports** `@scope/design-system` and
+never copies it; a scoped GitHub-Packages install **hard-requires `GITHUB_TOKEN`**:
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
 bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out {OUTPUT_DIR}
-# optional: --ds-pkg @npsin-oreo/design-system@0.2.0 (pin) · --ds-name · --ds-registry "" (public-npm/tarball)
+# optional: --ds-pkg @scope/design-system@x.y.z (pin) · --ds-name · --ds-registry "" (public-npm/tarball)
 ```
 
 - Installs the **pinned** DS (`--save-exact`) into `node_modules`, writes a scaffold `.npmrc` (scope →
