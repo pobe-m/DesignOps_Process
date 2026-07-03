@@ -7,7 +7,7 @@ with the users, edge cases, accessibility and design quality worked out automati
 
 Powered by Claude Code · Next.js 16 · shadcn/ui · Tailwind v4
 
-`Any intent → brief` · `WCAG-gated` · `138-brand aesthetic library` · `11-gate audit` · `161/161 selftest`
+`Any intent → brief` · `WCAG-gated` · `138-brand aesthetic library` · `11-gate audit` · `161/161 selftest` · `builds off your shadcn DS — no token`
 
 </div>
 
@@ -86,27 +86,31 @@ runs. It works for any kind of product — there are no fixed industry templates
 | 🔁 **Scored quality loop → iteration** | Step 4.6 critique = 6 weighted dimensions + Nielsen's 10 heuristics + an anti-slop gate (Banned Defaults). Then **Step 4.9** scores real test feedback (`severity × reach × confidence`; observed > stated; systemic vs one-person quirk) into the next prototype's work-list — build → test → fix top-N → repeat until it converges. |
 | 📐 **Typography + geometry + imagery** | Step 2.6 commits an explicit type hierarchy (weight-driven emphasis). Step 3.5 flags which screens need imagery → free-license sourcing with provenance + alt. Step 4.7b adds a render-based geometry audit (8pt grid · WCAG 2.2 target size · min text). |
 | 🧩 **19 design skills, folded in** | ux-writing, brandkit (DTCG tokens), image-to-code, migrate-design-system, performance, governance — vendored into the skill. See [`references/SKILLS.md`](.claude/skills/designops-pipeline/references/SKILLS.md). |
-| 📦 **Model A (imports the DS)** | The build **imports** `@npsin-oreo/design-system` (looloo) from GitHub Packages — never vendored. Needs `GITHUB_TOKEN`. The brand library + token kit ship with the skill. |
+| 📦 **Bring your own DS — no token** | **Model B (recommended):** point `--ds-src` at a local shadcn checkout (a Next app with `components/ui`); it's copied in and built with its own **public** deps — no package import, no GitHub Packages, no `GITHUB_TOKEN`. **Model A (legacy):** import a published `@scope/design-system` package (needs a token). The 138-brand library + token kit ship with the skill. |
 
 ---
 
 ## 🚀 Quick start
 
 ```bash
-# 1. Place your TOR at docs/tor.pdf  (or try the bundled sample — see below)
-export GITHUB_TOKEN=$(gh auth token)   # required — import the DS package from GitHub Packages
+# 1. Run the full pipeline. --ds points at YOUR shadcn DS (a local checkout with components/ui).
+#    From a document, or from any intent — no GITHUB_TOKEN needed for Model B.
+bash .claude/skills/designops-pipeline/scripts/run_pipeline.sh --tor docs/tor.pdf --ds ../shadcn-skills-design --out ./output
+#    …or start from any intent, no document:
+#    run_pipeline.sh --intent "a mobile app for splitting group expenses" --ds ../shadcn-skills-design --out ./output
 
-# 2. Run the full pipeline (DS inventory from the looloo source sibling)
-bash .claude/skills/designops-pipeline/scripts/run_pipeline.sh --tor docs/tor.pdf --ds ../looloo-design-system --out ./output
-#    …or start from any intent, no document needed:
-#    run_pipeline.sh --intent "a mobile app for splitting group expenses" --ds ../looloo-design-system --out ./output
+# 2. Build the prototype base off your DS (Model B — copies it in, installs its own public deps, no token)
+bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out ./output --ds-src ../shadcn-skills-design
 
-# 3. Generate the prototype from the draft (inside Claude Code)
+# 3. Generate the screens from the draft (inside Claude Code)
 /generate-prototype --all
 
 # 4. Run it
-cd output/prototype && npm install && npm run dev   # → http://localhost:3000
+cd output/prototype && npm run dev   # → http://localhost:3000
 ```
+
+> **Model A (legacy, needs a token):** to import a *published* DS package instead of a local checkout,
+> `export GITHUB_TOKEN=$(gh auth token)` and run `setup-prototype.sh --out ./output --ds-pkg @scope/design-system@x.y.z`.
 
 > 📱 **Test on a phone:** the dev server prints a `Network: http://<lan-ip>:3000` URL — open it on a
 > phone on the same Wi-Fi. The scaffolded `next.config.ts` auto-allows your LAN IPs, so the page
@@ -188,8 +192,8 @@ instead of the neutral shadcn default ("design slop").
 Output `aesthetic.json` + a ready-to-apply `output/brand.config.json` (carrying the whole theme) for
 `/generate-prototype` — and audit **gate 6** blocks if the build regresses to neutral.
 
-**Beyond colour — themeable axes + DS-native theming.** `@npsin-oreo/design-system@0.3.0` exposes
-**`axis_tokens`** in its contract — non-colour design axes (`ease · duration · leading · tracking ·
+**Beyond colour — themeable axes + DS-native theming.** When a DS ships a `token-contract.json` that
+exposes **`axis_tokens`** — non-colour design axes (`ease · duration · leading · tracking ·
 weight_heading · container · section`). So a product can theme typography/motion/layout, not just
 colour, from one config. The multi-product path: `brand.config.json` → `npx ds-brand-build` →
 `app/brand.css` → `@import "./brand.css"` in `globals.css`. The DS root stays the single source of
@@ -293,7 +297,7 @@ Full map: [`references/SKILLS.md`](.claude/skills/designops-pipeline/references/
 | `--tor <path>` | TOR file (PDF / DOCX / MD / TXT) |
 | `--tor-text "<text>"` | TOR text directly |
 | `--intent "<text>"` | any product intent (PRD / one-line idea / redesign / notes) — intake generalises it → `brief.json` |
-| `--ds <path>` | looloo design-system **source** checkout, read for inventory/token-contract only (default: `../looloo-design-system`) |
+| `--ds <path>` | your shadcn DS **source** checkout — read for the component inventory (Step 3.5); reuse the same path as `--ds-src` for the Model-B build |
 | `--brief <path>` | Reuse an existing `brief.json`, skipping steps 1+2 |
 | `--out <dir>` | Output directory (default: `./tor-output`) |
 | `--handoff <path>` · `--brand <name>` | (optional) token bridge → a separate handoff repo |
@@ -335,7 +339,7 @@ Designops-project-test/
 │       ├── image-to-code.md · brandkit.md · migrate-design-system.md
 │       ├── performance.md · governance.md · mobile-usability.md · SKILLS.md
 │       └── sample-tor.md
-│                                          # DS is imported (@npsin-oreo/design-system) — not in-repo
+│                                          # DS is your local shadcn checkout (Model B) — not in-repo
 ├── docs/tor.pdf                          # 📄 drop your TOR here
 ├── output/                               # 📤 generated artifacts (auto-created)
 └── CLAUDE.md                             # project context for Claude Code
@@ -366,18 +370,19 @@ Designops-project-test/
 |-------------|-----------|-------|
 | **Claude Code** | reading the TOR + generating every artifact | **Required.** Without it the runner only stages prompts and produces no output. |
 | **Python ≥ 3.9** | every validator + audit gate + DS inventory scan | **Stdlib only — no `pip install`.** (3.9+ for `list[str]` typing.) |
-| **Node.js ≥ 18** | building the prototype (`npm install && npm run dev`) | The build **imports** `@npsin-oreo/design-system` into `output/prototype/node_modules` (needs network + `GITHUB_TOKEN`). |
-| **`GITHUB_TOKEN`** | installing the DS package from GitHub Packages | **Required** for the build — `export GITHUB_TOKEN=$(gh auth token)`. Public packages still need auth on GitHub Packages. |
+| **Node.js ≥ 18** | building the prototype (`npm install && npm run dev`) | **Model B:** installs the DS checkout's own **public** deps — no token. **Model A:** imports a published package (needs network + `GITHUB_TOKEN`). |
+| **your shadcn DS** | the build base (Model B) + the component inventory (Step 3.5) | A local shadcn checkout (a Next app with `components/ui` + tokens + `globals.css`). Point `--ds` / `--ds-src` at it. |
+| **`GITHUB_TOKEN`** | **Model A only** — installing a published DS package from GitHub Packages | Not needed for Model B. `export GITHUB_TOKEN=$(gh auth token)`; public packages still need auth on GitHub Packages. |
 | **poppler** (`pdftotext`) | better PDF text extraction | Optional — falls back to Claude reading the PDF. `brew install poppler`. |
 | Playwright · Lighthouse · Figma MCP | Steps 4.7b / performance / 5 | Optional — these steps **skip cleanly** when the tool is absent. |
 
-**Cloning this repo to use elsewhere?** The pipeline is a **consumer of `@npsin-oreo/design-system`**
-(Model A) — the build imports the package, it is not standalone. Two things to know:
+**Cloning this repo to use elsewhere?** The pipeline itself is pure stdlib/bash; the only external piece
+is the DS, and **Model B keeps it self-contained**:
 
-- **You need access to `@npsin-oreo/design-system` on GitHub Packages** + a `GITHUB_TOKEN`
-  (`export GITHUB_TOKEN=$(gh auth token)`). The validators + the pipeline orchestration are pure
-  stdlib / bash, but the *build* (`setup-prototype.sh`) installs the DS package.
-- Point `--ds` (or `TOR_DS_PATH`) at a **looloo-design-system source checkout** — it is read only for
+- **Model B (recommended):** point `--ds` / `--ds-src` at your own **shadcn source checkout** — the build
+  copies it in and installs its **public** deps. No package registry, no `GITHUB_TOKEN`.
+- **Model A (legacy):** import a published `@scope/design-system` package — needs registry access + a
+  `GITHUB_TOKEN`. Point `--ds` at that DS's **source checkout** — it is read only for
   the component inventory + `token-contract.json` + DESIGN.md (Steps 2.6 / 3.5); the build still
   imports the published package.
 
@@ -399,24 +404,29 @@ the DTCG token gates. **Run it after editing any script** in `.claude/skills/des
 
 ---
 
-## 🧱 Model A — consumes the looloo design system
+## 🧱 The design system — two models
 
-The build **imports** `@npsin-oreo/design-system` (looloo) from GitHub Packages (pinned, currently
-**0.3.0**) — the DS is never vendored or copied. Components are immutable
-(`@npsin-oreo/design-system/<name>` in `node_modules`); customise via Step 2.6 token +
-`[data-slot=*]` overrides, never by editing them. The brand library + DTCG token kit still ship under
-`references/`. `run_pipeline.sh` resolves `--ds` (the looloo SOURCE, read only for
-inventory/token-contract): `TOR_DS_PATH` env → `../looloo-design-system` sibling. Requires
-`GITHUB_TOKEN` (`export GITHUB_TOKEN=$(gh auth token)`).
+**Model B (recommended) — build off a local shadcn checkout.** Point `--ds-src` at your DS source (a
+Next app with `components/ui` + tokens + `globals.css`, e.g. `pobe-m/shadcn-skills-design`).
+`setup-prototype.sh` copies it into `output/prototype` and runs a plain `npm install` of its **public**
+deps — **no package registry, no `GITHUB_TOKEN`.** Components are the DS's own `components/ui/*`
+(editable), imported via `@/components/ui/<name>`; theme via the Step 2.6 `brand.config.json` appended to
+`globals.css`. Verified end-to-end (`npm install` + `next build` pass with no token).
+
+**Model A (legacy) — import a published DS package.** `setup-prototype.sh --ds-pkg @scope/design-system@x.y.z`
+installs a pinned package (`--save-exact`) from a registry and imports `@scope/design-system/<name>`
+(immutable, in `node_modules`); a scoped GitHub-Packages install requires `GITHUB_TOKEN`
+(`export GITHUB_TOKEN=$(gh auth token)`). `run_pipeline.sh` resolves `--ds` (the DS SOURCE, read only for
+inventory/token-contract): `TOR_DS_PATH` env → a sibling checkout.
 
 `setup-prototype.sh` scaffolds the Tailwind-v4 guards every prototype needs: `@source not "../public"`
 + `@source not "../.next"` (v4 auto-source-detection otherwise reads binary `*.webp`/`*.png` as text →
 garbage classes → Turbopack 500), a Next `.gitignore`, and a `.vscode/settings.json` that silences the
 false "Unknown at rule" lint on `@source`/`@theme`/`@apply`.
 
-The `--handoff` token bridge (hex → oklch into a whitelabel repo) is **deprecated**. Under Model A
-the DS is the imported `@npsin-oreo/design-system` package and theming is owned by Step 2.6 → the product
-scaffold, so there is no token-bridge step in the normal flow. The flag is kept for back-compat only
+The `--handoff` token bridge (hex → oklch into a whitelabel repo) is **deprecated**. Theming is owned by
+Step 2.6 → the product scaffold (the `brand.config.json` appended to `globals.css`), so there is no
+token-bridge step in the normal flow. The flag is kept for back-compat only
 against a repo that still ships `brand.config.json` + `npm run brand:build` (never the DS repo).
 
 ---

@@ -125,17 +125,17 @@ TOR (PDF / DOCX / Notion / GDocs)
 # Full pipeline — TOR → brief → draft → POC delivery
 bash .claude/skills/designops-pipeline/scripts/run_pipeline.sh \
   --tor ./docs/tor.pdf \
-  --ds ../looloo-design-system \
+  --ds ../shadcn-skills-design \
   --out ./output
 
 # Steps 1+2 only (no design system yet)
 bash run_pipeline.sh --tor ./docs/tor.pdf --out ./output
 
 # Step 3 only (brief.json already exists)
-bash run_pipeline.sh --brief ./output/brief.json --ds ../looloo-design-system --out ./output
+bash run_pipeline.sh --brief ./output/brief.json --ds ../shadcn-skills-design --out ./output
 
 # Step 4 only (design-first-draft.md + DS already exist)
-bash run_pipeline.sh --draft ./output/design-first-draft.md --ds ../looloo-design-system --out ./output
+bash run_pipeline.sh --draft ./output/design-first-draft.md --ds ../shadcn-skills-design --out ./output
 ```
 
 ### Execution model (how the script and the agent split work)
@@ -487,7 +487,7 @@ Gate: `validate_screens.py {OUTPUT_DIR}/screen-inventory.json {OUTPUT_DIR}/flows
 ### Design system input
 
 ```bash
---ds ../looloo-design-system/          # local folder
+--ds ../shadcn-skills-design/          # local folder
 --ds ~/projects/acme-ds/       # absolute path
 --ds https://github.com/org/ds # auto git clone → /tmp/ds-repo/
 ```
@@ -643,7 +643,7 @@ After generating, log:
 
 ## Step 4 — POC Delivery Package
 
-Takes `design-first-draft.md` → scaffolds a Next.js prototype that **imports** `@npsin-oreo/design-system` as the base
+Takes `design-first-draft.md` → scaffolds a Next.js prototype off your DS (Model B: a local shadcn checkout copied in; Model A: an imported package) as the base
 
 > Full reference: `references/shadcn-prototype.md`  
 > **POC component library + mock data patterns: `references/poc-patterns.md`** — read before generating screens
@@ -704,7 +704,7 @@ bash .claude/skills/designops-pipeline/scripts/setup-prototype.sh --out {OUTPUT_
 - Always a **real** `node_modules` (never symlinked — a symlinked one breaks tsc's `@types/react` resolution).
 - **Version contract:** the published package must track the component API the screens target. Pin it
   (`--ds-pkg …@x.y.z`); a drift (e.g. a missing `AlertAction` export) breaks the build until the DS is
-  published to match. Read the DS inventory from a `../looloo-design-system` source checkout (`--ds`).
+  published to match. Read the DS inventory from a `../shadcn-skills-design` source checkout (`--ds`).
 
 `@npsin-oreo/design-system` provides:
 - shadcn/ui (radix) — 57 components, exported as `@npsin-oreo/design-system/<name>` (+ `/theme-provider`, `/styles.css`, `/token-contract.json`)
