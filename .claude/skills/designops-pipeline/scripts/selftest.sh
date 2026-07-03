@@ -505,10 +505,15 @@ FIX="$TMP/dsfix"; mkdir -p "$FIX/components/ui" "$FIX/app" "$FIX/lib"
 echo 'export const Button = () => null' > "$FIX/components/ui/button.tsx"
 echo '{ "name":"ds-fix","version":"0.0.0","dependencies":{"next":"16","react":"19"} }' > "$FIX/package.json"
 echo '@import "tailwindcss";' > "$FIX/app/globals.css"
+# a docs-site next.config (output:export + trailingSlash) — Model B must neutralise it for a dynamic prototype
+printf 'const nextConfig = {\n  output: "export",\n  trailingSlash: true,\n};\nexport default nextConfig;\n' > "$FIX/next.config.ts"
 SKIP_INSTALL=1 bash "$SETUP" --out "$TMP/mb" --ds-src "$FIX" >/dev/null 2>&1
 P="$TMP/mb/prototype"
 { [ -f "$P/components/ui/button.tsx" ] && [ ! -f "$P/.npmrc" ] && grep -q '@source not "../public"' "$P/app/globals.css"; } \
   && ok "Model B copies DS + appends guards + no .npmrc (no token)" || bad "Model B copy/guards/no-token failed"
+# next.config sanitised: output:export + trailingSlash commented out (no 308s, dynamic prototype)
+{ ! grep -Eq '^[[:space:]]*output:[[:space:]]*"export"' "$P/next.config.ts" && ! grep -Eq '^[[:space:]]*trailingSlash:[[:space:]]*true' "$P/next.config.ts"; } \
+  && ok "Model B neutralises docs-site next.config (output:export / trailingSlash disabled)" || bad "Model B next.config not sanitised"
 # Model B rejects a non-shadcn dir
 SKIP_INSTALL=1 bash "$SETUP" --out "$TMP/mbx" --ds-src "$TMP" >/dev/null 2>&1 && bad "non-shadcn --ds-src should fail" || ok "Model B rejects a dir with no components/ → exit 1"
 # token is HARD-required (no fallback)
