@@ -80,9 +80,10 @@ def validate(intel_path, brief_path=None, research_path=None):
         except Exception:
             warnings.append(f"could not read brief.json at {brief_path} — skipping referential checks")
 
-    # research.json personas — enables the user_type → persona coverage invariant.
-    # Absent → coverage is not enforced (research is an optional upstream layer).
+    # research.json — enables the persona/JTBD/pain coverage invariants across 2.3 → 2.5.
+    # Absent → none of the research-driven checks run (research is an optional upstream layer).
     persona_ids, primary_persona_ids = None, set()
+    jtbd_ids, pain_ids, high_pain_ids = None, None, set()
     if research_path:
         try:
             with open(research_path) as f:
@@ -94,6 +95,10 @@ def validate(intel_path, brief_path=None, research_path=None):
                     persona_ids.add(pid)
                     if p.get("primary") is True:
                         primary_persona_ids.add(pid)
+            jtbd_ids = {j.get("id") for j in research.get("jobs_to_be_done", []) if j.get("id")}
+            pain_ids = {pp.get("id") for pp in research.get("pain_points", []) if pp.get("id")}
+            high_pain_ids = {pp.get("id") for pp in research.get("pain_points", [])
+                             if pp.get("id") and pp.get("severity") == "high"}
         except Exception:
             warnings.append(f"could not read research.json at {research_path} — skipping persona coverage checks")
 
@@ -163,6 +168,9 @@ def validate(intel_path, brief_path=None, research_path=None):
 
     # ── user_goals ──────────────────────────────────────────────────────────────
     goal_ids = set()
+    any_pain_refs = False       # was pain_refs used anywhere? (opt-in coverage)
+    any_jtbd_refs = False       # was jtbd_ref used anywhere? (informational)
+    pain_refs_seen = set()      # union of pain_refs across every goal
     goals = d["user_goals"]
     if not isinstance(goals, list) or not goals:
         errors.append("user_goals must have at least 1 entry")
@@ -185,12 +193,46 @@ def validate(intel_path, brief_path=None, research_path=None):
                     feature_refs_seen.add(fr)
                     if brief_feature_ids and fr not in brief_feature_ids:
                         errors.append(f"user_goals[{i}].feature_refs '{fr}' not in brief.core_features")
+            # research traceability — jtbd_ref: referential only (one JTBD ↔ many goals is legal,
+            # so no coverage check). pain_refs: referential always + high-severity coverage when
+            # the field is used at all (opt-in, mirrors any_feature_refs).
+            if "jtbd_ref" in g and jtbd_ids is not None:
+                any_jtbd_refs = True
+                jr = g.get("jtbd_ref")
+                if jr and jr not in jtbd_ids:
+                    errors.append(f"user_goals[{i}].jtbd_ref '{jr}' does not resolve to any "
+                                  "jobs_to_be_done id in research.json")
+            if "pain_refs" in g and pain_ids is not None:
+                any_pain_refs = True
+                for pr in g.get("pain_refs") or []:
+                    if pr in pain_ids:
+                        pain_refs_seen.add(pr)
+                    else:
+                        errors.append(f"user_goals[{i}].pain_refs '{pr}' does not resolve to any "
+                                      "pain_points id in research.json")
             stmt = (g.get("statement") or "").lower()
             if any(n in stmt for n in ("button", "screen", "page", "click", "tab ", "modal")):
                 warnings.append(f"user_goals[{i}].statement reads like a feature, not an outcome: {g.get('statement')!r}")
 
+    # Coverage: every high-severity pain must be addressed by some goal — but only when the
+    # field is opted in. Silence when nobody declared pain_refs (nudge with a warning if there
+    # actually ARE high pains that the goals could be tied to).
+    if pain_ids is not None:
+        if any_pain_refs:
+            for pid in sorted(high_pain_ids - pain_refs_seen):
+                errors.append(f"pain_point '{pid}' (severity=high) is not referenced by any "
+                              "user_goal.pain_refs — a high-severity pain that no goal addresses is a dropped problem")
+        elif high_pain_ids:
+            warnings.append("user_goals declare no pain_refs — research→goal traceability not enforced; "
+                            "add pain_refs so every high-severity pain provably drives a goal")
+
+    # Pre-scan compliance ids so core_tasks.compliance_refs can resolve against them
+    # (compliance_requirements gets its own full validation later — we just need the id pool here).
+    comp_ids = {c.get("id") for c in d.get("compliance_requirements", []) or [] if c.get("id")}
+
     # ── core_tasks ──────────────────────────────────────────────────────────────
     task_ids = set()
+    compliance_refs_seen = set()  # union of compliance_refs across every task (opt-in, seam-2)
     tasks = d["core_tasks"]
     if not isinstance(tasks, list) or not tasks:
         errors.append("core_tasks must have at least 1 entry")
@@ -213,6 +255,16 @@ def validate(intel_path, brief_path=None, research_path=None):
                     feature_refs_seen.add(fr)
                     if brief_feature_ids and fr not in brief_feature_ids:
                         errors.append(f"core_tasks[{i}].feature_refs '{fr}' not in brief.core_features")
+            # seam-2: compliance_refs is optional; when used, must resolve into
+            # compliance_requirements. Coverage of mandatory compliance is enforced later as
+            # a warning (see the block right after compliance_requirements), not here.
+            if "compliance_refs" in t:
+                for cr in t.get("compliance_refs") or []:
+                    if cr in comp_ids:
+                        compliance_refs_seen.add(cr)
+                    else:
+                        errors.append(f"core_tasks[{i}].compliance_refs '{cr}' does not resolve to any "
+                                      "compliance_requirements id in intelligence.json")
 
     # ── workflow_complexity ─────────────────────────────────────────────────────
     wc = d["workflow_complexity"]
@@ -246,7 +298,7 @@ def validate(intel_path, brief_path=None, research_path=None):
 
     # ── compliance_requirements ─────────────────────────────────────────────────
     comp = d["compliance_requirements"]
-    comp_ids = set()
+    comp_ids = set()  # rebuild + enforce id uniqueness (pre-scan above only pooled for cross-refs)
     if not isinstance(comp, list):
         errors.append("compliance_requirements must be an array")
     else:
@@ -259,6 +311,28 @@ def validate(intel_path, brief_path=None, research_path=None):
             _enum(c.get("scope"), COMPLIANCE_SCOPE, f"compliance_requirements[{i}].scope", errors)
             if c.get("mandatory") and not c.get("ui_implications"):
                 errors.append(f"compliance_requirements[{i}] is mandatory but has empty ui_implications")
+
+    # seam-2: every mandatory compliance needs SOME user-facing path — either a core_task
+    # references it (compliance_refs) or a design_directives.mandatory_flow is named after it.
+    # Warning-only because some mandatory rules are backend-only (retention, encryption at rest)
+    # and forcing a UI path would push agents to invent fake tasks to pass the gate.
+    def _norm(s):
+        return str(s or "").strip().lower().replace("-", " ").replace("_", " ")
+    mf_names_norm = [_norm(m) for m in (d.get("design_directives", {}).get("mandatory_flows", []) or [])]
+    for c in comp if isinstance(comp, list) else []:
+        cid = c.get("id")
+        if not (cid and c.get("mandatory")):
+            continue
+        if cid in compliance_refs_seen:
+            continue
+        cname_norm = _norm(c.get("name"))
+        matched_by_mf = cname_norm and any(
+            cname_norm == mfn or cname_norm in mfn or mfn in cname_norm for mfn in mf_names_norm)
+        if matched_by_mf:
+            continue
+        label = f"'{cid}'" + (f" ({c.get('name')})" if c.get("name") else "")
+        warnings.append(f"mandatory compliance {label} has no user-facing path — "
+                        "no core_task.compliance_refs and no matching mandatory_flow")
 
     # ── decision_criticality ────────────────────────────────────────────────────
     dc = d["decision_criticality"]

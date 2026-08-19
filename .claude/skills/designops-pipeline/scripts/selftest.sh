@@ -146,6 +146,45 @@ python3 "$VALIDATE_INTEL" "$TMP/i_feat_ok.json" "$TMP/brief_intel.json" >/dev/nu
 python3 -c "import json;d=json.load(open('$TMP/intel.json'));d['core_tasks'][0]['feature_refs']=['F2'];json.dump(d,open('$TMP/i_feat_bad.json','w'))"
 python3 "$VALIDATE_INTEL" "$TMP/i_feat_bad.json" "$TMP/brief_intel.json" >/dev/null 2>&1 && bad "unserved Must feature should fail" || ok "Must feature → task traceability enforced → exit 1"
 
+# ── T6.p1–T6.p5: research → goal traceability (jtbd_ref + pain_refs) ─────────
+# research fixture: 2 personas + 1 JTBD + 2 pains (PP01 high, PP02 med)
+cat > "$TMP/research_r.json" <<'PY'
+{"meta":{"evidence_mode":"inferred","inputs_provided":[],"overall_confidence":"medium"},
+ "personas":[{"id":"P01","name":"Op","primary":true,"tech_proficiency":"intermediate","source":"inferred","confidence":"medium","evidence":[]}],
+ "jobs_to_be_done":[{"id":"JTBD01","persona_ref":"P01","when":"w","want":"x","so_that":"y","priority":"must","source":"inferred","confidence":"medium","evidence":[]}],
+ "pain_points":[{"id":"PP01","persona_ref":"P01","statement":"s","severity":"high","source":"inferred","confidence":"medium","evidence":[]},
+                {"id":"PP02","persona_ref":"P01","statement":"s","severity":"med","source":"inferred","confidence":"medium","evidence":[]}]}
+PY
+# base intel fixture — persona_ref set, but no pain_refs / jtbd_ref yet
+python3 -c "import json;d=json.load(open('$TMP/intel.json'));d['user_types'][0]['persona_ref']='P01';json.dump(d,open('$TMP/intel_r.json','w'))"
+# T6.p1: pain_refs cover every high pain (PP01) — jtbd_ref resolves too — exit 0
+python3 -c "import json;d=json.load(open('$TMP/intel_r.json'));d['user_goals'][0]['jtbd_ref']='JTBD01';d['user_goals'][0]['pain_refs']=['PP01'];json.dump(d,open('$TMP/intel_pain_ok.json','w'))"
+python3 "$VALIDATE_INTEL" "$TMP/intel_pain_ok.json" "$TMP/brief_intel.json" "$TMP/research_r.json" >/dev/null 2>&1 && ok "T6.p1 pain_refs cover every high pain (+ jtbd_ref resolves) → exit 0" || bad "T6.p1 full coverage should pass"
+# T6.p2: pain_refs used, but PP01 (high) not covered — only PP02 (med) referenced — exit 1
+python3 -c "import json;d=json.load(open('$TMP/intel_r.json'));d['user_goals'][0]['pain_refs']=['PP02'];json.dump(d,open('$TMP/intel_pain_gap.json','w'))"
+python3 "$VALIDATE_INTEL" "$TMP/intel_pain_gap.json" "$TMP/brief_intel.json" "$TMP/research_r.json" >/dev/null 2>&1 && bad "T6.p2 uncovered high pain should fail" || ok "T6.p2 pain_refs used but high pain uncovered → exit 1"
+# T6.p3: pain_refs points at id that doesn't exist in research → exit 1
+python3 -c "import json;d=json.load(open('$TMP/intel_r.json'));d['user_goals'][0]['pain_refs']=['PP99'];json.dump(d,open('$TMP/intel_pain_bogus.json','w'))"
+python3 "$VALIDATE_INTEL" "$TMP/intel_pain_bogus.json" "$TMP/brief_intel.json" "$TMP/research_r.json" >/dev/null 2>&1 && bad "T6.p3 unresolved pain_refs id should fail" || ok "T6.p3 pain_refs unresolved id → exit 1"
+# T6.p4: no goal declares pain_refs at all — high pain exists in research → warn (exit 0)
+python3 "$VALIDATE_INTEL" "$TMP/intel_r.json" "$TMP/brief_intel.json" "$TMP/research_r.json" > "$TMP/intel_r.out" 2>&1
+rc=$?
+{ [ "$rc" = "0" ] && grep -q "no pain_refs" "$TMP/intel_r.out"; } && ok "T6.p4 no pain_refs anywhere → exit 0 + warning" || bad "T6.p4 unopted pain_refs should warn not block — rc=$rc"
+# T6.p5: no research.json → jtbd/pain checks all skip → exit 0 (identical to the pre-Phase-3 flow)
+python3 "$VALIDATE_INTEL" "$TMP/intel_r.json" "$TMP/brief_intel.json" >/dev/null 2>&1 && ok "T6.p5 no research.json → exit 0 (jtbd/pain checks skipped)" || bad "T6.p5 omitting research should skip the check"
+
+# ── T6.c1–T6.c3: seam-2 compliance → user-facing path traceability ────────────
+# T6.c1: core_tasks[0].compliance_refs resolves to C01 → exit 0
+python3 -c "import json;d=json.load(open('$TMP/intel_r.json'));d['core_tasks'][0]['compliance_refs']=['C01'];json.dump(d,open('$TMP/intel_comp_ok.json','w'))"
+python3 "$VALIDATE_INTEL" "$TMP/intel_comp_ok.json" "$TMP/brief_intel.json" "$TMP/research_r.json" >/dev/null 2>&1 && ok "T6.c1 core_tasks.compliance_refs resolves → exit 0" || bad "T6.c1 compliance_refs resolves should pass"
+# T6.c2: compliance_refs points at id that doesn't exist → exit 1
+python3 -c "import json;d=json.load(open('$TMP/intel_r.json'));d['core_tasks'][0]['compliance_refs']=['C99'];json.dump(d,open('$TMP/intel_comp_bogus.json','w'))"
+python3 "$VALIDATE_INTEL" "$TMP/intel_comp_bogus.json" "$TMP/brief_intel.json" "$TMP/research_r.json" >/dev/null 2>&1 && bad "T6.c2 unresolved compliance_refs should fail" || ok "T6.c2 compliance_refs unresolved → exit 1"
+# T6.c3: mandatory C01 (HIPAA) not referenced by any task AND no matching mandatory_flow → warn (exit 0)
+python3 "$VALIDATE_INTEL" "$TMP/intel_r.json" "$TMP/brief_intel.json" "$TMP/research_r.json" > "$TMP/intel_comp.out" 2>&1
+rc=$?
+{ [ "$rc" = "0" ] && grep -q "no user-facing path" "$TMP/intel_comp.out"; } && ok "T6.c3 mandatory compliance without user-facing path → exit 0 + warning" || bad "T6.c3 uncovered mandatory compliance should warn not block — rc=$rc"
+
 # ── T7. Flows gate (Step 3) ───────────────────────────────────────────────────
 echo "[T7] flows gate — valid passes, nav_model mismatch fails"
 cat > "$TMP/i2.json" <<'PY'
