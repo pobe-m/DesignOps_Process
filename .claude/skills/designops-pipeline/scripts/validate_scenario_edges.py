@@ -29,6 +29,15 @@ def _enum(val, allowed, path, errors):
         errors.append(f"{path}: {val!r} not in {sorted(allowed)}")
 
 
+def _norm(s):
+    """Same normalisation validate_flows._norm uses — keeps the two matchers in sync."""
+    return str(s or "").strip().lower().replace("-", " ").replace("_", " ")
+
+
+def _tokens(s):
+    return {t for t in _norm(s).split() if t}
+
+
 def validate(path, intel_path=None):
     errors, warnings = [], []
     try:
@@ -37,9 +46,10 @@ def validate(path, intel_path=None):
     except (OSError, json.JSONDecodeError) as e:
         return [f"cannot read {path}: {e}"], []
 
-    # optional intelligence.json — ref resolution + severity floors
+    # optional intelligence.json — ref resolution + severity floors + mandatory_flows dedupe
     ut_ids, task_ids, comp_ids = None, None, None
     et_overall, dc_overall, has_mandatory_comp = None, None, None
+    mandatory_flow_names = None  # None = intel not loaded; [] = loaded but empty
     if intel_path:
         try:
             with open(intel_path) as f:
@@ -50,6 +60,7 @@ def validate(path, intel_path=None):
             et_overall = intel.get("error_tolerance", {}).get("overall")
             dc_overall = intel.get("decision_criticality", {}).get("overall")
             has_mandatory_comp = any(c.get("mandatory") for c in intel.get("compliance_requirements", []))
+            mandatory_flow_names = list(intel.get("design_directives", {}).get("mandatory_flows", []) or [])
         except (OSError, json.JSONDecodeError):
             warnings.append(f"could not read intelligence.json at {intel_path} — skipping ref + floor checks")
 
@@ -84,6 +95,31 @@ def validate(path, intel_path=None):
         mif = e.get("may_inject_flow")
         if isinstance(mif, dict) and mif.get("inject") and not mif.get("flow_name"):
             errors.append(f"{p}.may_inject_flow.inject is true but flow_name is empty")
+
+        # 2.5 ↔ 2.5b naming reconciliation — an edge covered by an existing mandatory_flow
+        # must point at it explicitly rather than injecting a same-concept duplicate.
+        cbmf = e.get("covered_by_mandatory_flow")
+        inject_on = isinstance(mif, dict) and bool(mif.get("inject"))
+        if cbmf and inject_on:
+            errors.append(f"{p}: may_inject_flow.inject=true and covered_by_mandatory_flow={cbmf!r} "
+                          "both set — pick one; if the edge is already covered, set inject=false")
+        if cbmf and mandatory_flow_names is not None:
+            if not any(_norm(cbmf) == _norm(mf) for mf in mandatory_flow_names):
+                errors.append(f"{p}.covered_by_mandatory_flow {cbmf!r} does not resolve to any "
+                              "design_directives.mandatory_flows entry in intelligence.json")
+        # safety net: inject=true whose flow_name shares >=2 normalised tokens with a
+        # mandatory_flow → likely the same concept named differently. Warning (not error) —
+        # concept identity isn't a decidable machine call.
+        if inject_on and mandatory_flow_names:
+            fn = mif.get("flow_name") or ""
+            fn_toks = _tokens(fn)
+            for mf in mandatory_flow_names:
+                overlap = fn_toks & _tokens(mf)
+                if len(overlap) >= 2:
+                    warnings.append(f"{p}: possible duplicate concept with mandatory_flow {mf!r} — "
+                                    f"set covered_by_mandatory_flow if they are the same flow "
+                                    f"(shared tokens: {sorted(overlap)})")
+                    break
 
         # honesty: a must edge resting on a low-confidence inference needs an open_question
         if e.get("severity") == "must" and e.get("source") == "inferred" and e.get("confidence") == "low" \

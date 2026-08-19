@@ -572,6 +572,40 @@ python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/scenario_edges_bad.json"
 python3 -c "import json;d=json.load(open('$TMP/scenario_edges.json'));d['scenario_edges'][0]['task_ref']='T99';json.dump(d,open('$TMP/scenario_edges_ref.json','w'))"
 python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/scenario_edges_ref.json" "$TMP/intel_min.json" >/dev/null 2>&1 && bad "unresolved task_ref should fail" || ok "scenario edge ref resolves into intelligence → exit 1 (BLOCKED)"
 
+# Phase 2.5: covered_by_mandatory_flow — dedupe 2.5 mandatory_flows vs 2.5b flow_name
+cat > "$TMP/intel_mf.json" <<'JSON'
+{ "user_types": [], "core_tasks": [{ "id": "T01" }], "compliance_requirements": [],
+  "error_tolerance": { "overall": "low" }, "decision_criticality": { "overall": "low" },
+  "design_directives": { "mandatory_flows": ["release-result-with-undo","consent"] } }
+JSON
+# (a) inject=false + covered_by_mandatory_flow that resolves → exit 0
+cat > "$TMP/se_covered_ok.json" <<'JSON'
+{ "meta": { "schema_version": "1.0", "overall_confidence": "medium" },
+  "scenario_edges": [{ "id": "SE01", "dimension": "error_tolerance", "scenario": "wrong-patient release",
+    "severity": "must", "suggested_handling": "confirm + undo", "task_ref": "T01",
+    "source": "inferred", "confidence": "medium",
+    "may_inject_flow": { "inject": false },
+    "covered_by_mandatory_flow": "release-result-with-undo" }] }
+JSON
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/se_covered_ok.json" "$TMP/intel_mf.json" >/dev/null 2>&1 && ok "covered_by_mandatory_flow resolves → exit 0" || bad "covered_by resolves should pass"
+# (b) covered_by_mandatory_flow that DOESN'T resolve → exit 1
+python3 -c "import json;d=json.load(open('$TMP/se_covered_ok.json'));d['scenario_edges'][0]['covered_by_mandatory_flow']='does-not-exist';json.dump(d,open('$TMP/se_covered_bad.json','w'))"
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/se_covered_bad.json" "$TMP/intel_mf.json" >/dev/null 2>&1 && bad "unresolved covered_by should fail" || ok "covered_by_mandatory_flow unresolved → exit 1 (BLOCKED)"
+# (c) inject=true AND covered_by both set → exit 1 (conflict)
+python3 -c "import json;d=json.load(open('$TMP/se_covered_ok.json'));d['scenario_edges'][0]['may_inject_flow']={'inject':True,'flow_name':'x'};d['scenario_edges'][0]['covered_by_mandatory_flow']='release-result-with-undo';json.dump(d,open('$TMP/se_conflict.json','w'))"
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/se_conflict.json" "$TMP/intel_mf.json" >/dev/null 2>&1 && bad "inject=true + covered_by should fail" || ok "inject=true and covered_by both set → exit 1 (BLOCKED)"
+# (d) inject=true + flow_name shares ≥2 tokens with mandatory_flow → warn (exit 0)
+cat > "$TMP/se_overlap.json" <<'JSON'
+{ "meta": { "schema_version": "1.0", "overall_confidence": "medium" },
+  "scenario_edges": [{ "id": "SE01", "dimension": "error_tolerance", "scenario": "wrong-patient release",
+    "severity": "must", "suggested_handling": "confirm + undo", "task_ref": "T01",
+    "source": "inferred", "confidence": "medium",
+    "may_inject_flow": { "inject": true, "flow_name": "undo-release-window" } }] }
+JSON
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/se_overlap.json" "$TMP/intel_mf.json" > "$TMP/se_overlap.out" 2>&1
+rc=$?
+{ [ "$rc" = "0" ] && grep -q "possible duplicate concept" "$TMP/se_overlap.out"; } && ok "flow_name overlap with mandatory_flow → exit 0 + warning" || bad "token-overlap should warn (not block) — rc=$rc"
+
 # feedback loop (4.9) — valid scored findings; score-math mismatch fails; systemic needs reach ≥ 2
 cat > "$TMP/test_findings.json" <<'JSON'
 { "meta": { "schema_version": "1.0", "iteration": 1, "test_method": "real_user", "convergence": { "new_this_round": 1, "dry_rounds": 0 } },

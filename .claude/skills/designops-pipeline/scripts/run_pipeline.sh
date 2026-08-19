@@ -359,10 +359,16 @@ Walk each of the 10 intelligence dimensions to its boundary/failure scenario (se
 every edge in the dimension it rests on + refs (user_type_ref/task_ref/compliance_ref) that resolve into
 intelligence.json. Severity comes from intelligence, NOT taste: low/zero error_tolerance → its edges are
 must (+ a recovery in suggested_handling); high/safety decision_criticality → must; mandatory compliance
-→ a must edge. Snapshot the floors into meta.driven_by. When an edge implies a whole flow that doesn't
-exist yet, set may_inject_flow.inject=true + a flow_name (Step 3 adds it). A must edge resting on a
-low-confidence inference carries an open_question. Do NOT do screen-state edges (empty/loading/error per
-screen) — that is Step 3.7; this is the product/requirement altitude.
+→ a must edge. Snapshot the floors into meta.driven_by. A must edge resting on a low-confidence inference
+carries an open_question. Do NOT do screen-state edges (empty/loading/error per screen) — that is
+Step 3.7; this is the product/requirement altitude.
+
+BEFORE setting may_inject_flow, read intelligence.design_directives.mandatory_flows. If this scenario
+edge is already covered by an existing mandatory_flow, DO NOT inject a duplicate — set
+may_inject_flow.inject=false and add covered_by_mandatory_flow:"<the mandatory_flow name>" instead.
+Only when the edge implies a whole flow that no mandatory_flow already covers → may_inject_flow.inject=true
++ a flow_name (Step 3 adds it). Same concept, one flow — 2.5b naming a duplicate makes Step 3 build the
+screen twice and Step 3.7 produce two edge sets for the same surface.
 PROMPT
   _generate "$PROMPT_SE" "Step 2.5b — intelligence → scenario edges" "$SCENARIO_EDGES_JSON"
 fi
