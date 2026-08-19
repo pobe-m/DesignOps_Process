@@ -503,8 +503,10 @@ Refine each brief.user_flow using design_directives:
   may_inject_flow.inject=true (use its flow_name, source_flow_ref:null) — these are the missing flows 2.5b found
 
 Shape per flows.json: { meta, navigation_model, flows:[{id,name,source_flow_ref,user_type_ref,goal_ref,
-steps:[{n,action,decision,safeguard}],entry,exit,directives_applied:[]}], mandatory_flows:[{name,reason,injected}] }
+task_refs:[],steps:[{n,action,decision,safeguard}],entry,exit,directives_applied:[]}], mandatory_flows:[{name,reason,injected}] }
 Each flow.user_type_ref/goal_ref must resolve into intelligence.json. Every design_directives.mandatory_flow must appear as an injected flow.
+ให้ทุก flow มี task_refs:[] ระบุ core_tasks ids ที่ flow นั้นทำให้สำเร็จ
+core_task ทุกตัวที่ trigger เป็น user หรือ event ต้องถูกอ้างอย่างน้อยหนึ่ง flow
 PROMPT
   _generate "$PROMPT_FLOWS" "Step 3 — refine user flows" "$FLOWS_JSON"
 fi

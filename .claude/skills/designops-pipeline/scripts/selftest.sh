@@ -206,6 +206,49 @@ python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows.json" "$TMP/i2_system_uncov
 # T7.9: don't pass scenario-edges.json → whole 2.5b check is skipped → exit 0
 python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_se_missing.json" "$TMP/i2.json" >/dev/null 2>&1 && ok "T7.9 no scenario-edges arg → exit 0 (2.5b check skipped)" || bad "T7.9 omitting scenario-edges should skip the check"
 
+# ── T7.10–T7.14: task_refs coverage (core_tasks → flow traceability) ─────────
+# intel with 2 user-triggered core_tasks (T01 user, T02 event) + 1 scheduled (T03).
+cat > "$TMP/i2_tasks.json" <<'PY'
+{"meta":{},"user_types":[{"id":"UT01","name":"Op","role_category":"operator","relationship":"primary"}],
+ "user_goals":[{"id":"G01"}],
+ "core_tasks":[
+   {"id":"T01","name":"submit order","trigger":"user"},
+   {"id":"T02","name":"react to alert","trigger":"event"},
+   {"id":"T03","name":"nightly sync","trigger":"scheduled"}],
+ "workflow_complexity":{},"data_density":{},"error_tolerance":{},"accessibility_needs":{},
+ "compliance_requirements":[],"decision_criticality":{},
+ "design_directives":{"navigation_model":"hub_spoke","mandatory_flows":["consent"]}}
+PY
+# T7.10: task_refs cover BOTH user-triggered tasks (T01 + T02) → exit 0
+cat > "$TMP/flows_tasks_ok.json" <<'PY'
+{"meta":{},"navigation_model":"hub_spoke","flows":[
+ {"id":"FL01","name":"Book","source_flow_ref":"UF01","user_type_ref":"UT01","goal_ref":"G01","task_refs":["T01"],"steps":[{"n":1,"action":"pick"}],"entry":"home","exit":"done","directives_applied":[]},
+ {"id":"FL02","name":"Consent","source_flow_ref":null,"user_type_ref":"UT01","goal_ref":"G01","task_refs":["T02"],"steps":[{"n":1,"action":"accept"}],"entry":"first","exit":"home","directives_applied":["mandatory"]}],
+ "mandatory_flows":[{"name":"consent","reason":"PDPA","injected":true}]}
+PY
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_tasks_ok.json" "$TMP/i2_tasks.json" >/dev/null 2>&1 && ok "T7.10 task_refs cover every user-triggered task → exit 0" || bad "T7.10 full task coverage should pass"
+# T7.11: T02 is trigger:user but no flow references it → error
+python3 -c "import json;d=json.load(open('$TMP/flows_tasks_ok.json'));d['flows'][1]['task_refs']=[];json.dump(d,open('$TMP/flows_tasks_gap.json','w'))"
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_tasks_gap.json" "$TMP/i2_tasks.json" >/dev/null 2>&1 && bad "T7.11 uncovered user-triggered task should fail" || ok "T7.11 user-triggered task without a flow → exit 1"
+# T7.12: only user-triggered task (T01) is covered; T03 stays uncovered but trigger:scheduled → exempt → exit 0
+cat > "$TMP/i2_tasks_scheduled.json" <<'PY'
+{"meta":{},"user_types":[{"id":"UT01","name":"Op","role_category":"operator","relationship":"primary"}],
+ "user_goals":[{"id":"G01"}],
+ "core_tasks":[
+   {"id":"T01","name":"submit order","trigger":"user"},
+   {"id":"T03","name":"nightly sync","trigger":"scheduled"}],
+ "workflow_complexity":{},"data_density":{},"error_tolerance":{},"accessibility_needs":{},
+ "compliance_requirements":[],"decision_criticality":{},
+ "design_directives":{"navigation_model":"hub_spoke","mandatory_flows":["consent"]}}
+PY
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_tasks_gap.json" "$TMP/i2_tasks_scheduled.json" >/dev/null 2>&1 && ok "T7.12 uncovered scheduled task is exempt → exit 0" || bad "T7.12 scheduled trigger should be exempt"
+# T7.13: task_refs points at an id that doesn't exist in intelligence.core_tasks → error
+python3 -c "import json;d=json.load(open('$TMP/flows_tasks_ok.json'));d['flows'][0]['task_refs']=['T09'];json.dump(d,open('$TMP/flows_tasks_bogus.json','w'))"
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_tasks_bogus.json" "$TMP/i2_tasks.json" >/dev/null 2>&1 && bad "T7.13 bogus task_refs id should fail" || ok "T7.13 unresolved task_refs id → exit 1"
+# T7.14: no flow declares task_refs at all → warning only, exit 0
+python3 -c "import json;d=json.load(open('$TMP/flows_tasks_ok.json'));[f.pop('task_refs',None) for f in d['flows']];json.dump(d,open('$TMP/flows_no_task_refs.json','w'))"
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_no_task_refs.json" "$TMP/i2_tasks.json" >/dev/null 2>&1 && ok "T7.14 no task_refs anywhere → exit 0 (warn only)" || bad "T7.14 unopted task_refs should warn not block"
+
 # ── T8. Screens gate (Step 3.5) ───────────────────────────────────────────────
 echo "[T8] screens gate — valid passes, coverage gap fails"
 cat > "$TMP/screens.json" <<'PY'

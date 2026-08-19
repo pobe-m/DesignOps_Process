@@ -50,9 +50,10 @@ def _name_pool_match(needle, name_pool):
 
 def validate(flows_path, intel_path=None, brief_path=None, edges_path=None):
     errors, warnings = [], []
+    _empty_summary = {"injected_from_edges": 0, "tasks_covered": 0, "tasks_total": 0}
     d, err = _load(flows_path)
     if err:
-        return [err], [], 0
+        return [err], [], _empty_summary
 
     intel = brief = edges = None
     if intel_path:
@@ -72,7 +73,7 @@ def validate(flows_path, intel_path=None, brief_path=None, edges_path=None):
         if k not in d:
             errors.append(f"missing top-level key: '{k}'")
     if errors:
-        return errors, warnings, 0
+        return errors, warnings, _empty_summary
 
     if d["navigation_model"] not in NAV_MODEL:
         errors.append(f"navigation_model must be one of {sorted(NAV_MODEL)} (got: {d['navigation_model']!r})")
@@ -80,7 +81,7 @@ def validate(flows_path, intel_path=None, brief_path=None, edges_path=None):
     flows = d["flows"]
     if not isinstance(flows, list) or not flows:
         errors.append("flows must have at least 1 entry")
-        return errors, warnings, 0
+        return errors, warnings, _empty_summary
 
     # reference sets from upstream artifacts
     ut_ids = {u.get("id") for u in (intel or {}).get("user_types", [])} if intel else None
@@ -143,6 +144,46 @@ def validate(flows_path, intel_path=None, brief_path=None, edges_path=None):
             elif rel in ("secondary", "occasional"):
                 warnings.append(f"{rel} user_type {label} has no flow in flows.json")
 
+        # Phase 2.2 — task_refs coverage: every user-triggered core_task must land in some flow.
+        # `scheduled` / `system` triggers are exempt: those tasks run without a UI, so forcing
+        # a flow would push agents to invent one just to pass (same reasoning as the `system`
+        # role_category exemption above). Opt-in via the `any_*_refs` pattern: silence when the
+        # field isn't used anywhere; enforce hard once anyone opts in.
+        core_tasks = intel.get("core_tasks", []) or []
+        task_ids_from_intel = {t.get("id") for t in core_tasks if t.get("id")}
+        ui_task_ids = {t.get("id") for t in core_tasks
+                       if t.get("id") and t.get("trigger") not in ("scheduled", "system")}
+        any_task_refs = False
+        task_refs_seen = set()
+        for i, fl in enumerate(flows):
+            refs = fl.get("task_refs")
+            if refs is None:
+                continue
+            if not isinstance(refs, list):
+                errors.append(f"flows[{i}].task_refs must be a list of core_tasks ids")
+                continue
+            for ref in refs:
+                any_task_refs = True
+                if ref in task_ids_from_intel:
+                    task_refs_seen.add(ref)
+                else:
+                    errors.append(f"flows[{i}].task_refs '{ref}' does not resolve to any core_tasks id in intelligence.json")
+        if any_task_refs:
+            for task in core_tasks:
+                tid = task.get("id")
+                if tid and tid in ui_task_ids and tid not in task_refs_seen:
+                    tname = task.get("name") or ""
+                    label = f"'{tid}'" + (f" ({tname})" if tname else "")
+                    errors.append(f"core_task {label} has no flow in flows.json — a task the user must perform but never gets a path")
+        elif ui_task_ids:
+            warnings.append("flows declare no task_refs — task→flow traceability not enforced; "
+                            "add task_refs so every user-triggered core_task provably gets a path")
+        tasks_covered = len(task_refs_seen & ui_task_ids)
+        tasks_total = len(ui_task_ids)
+    else:
+        tasks_covered = 0
+        tasks_total = 0
+
     # Phase 1.2 — 2.5b injection check: every scenario_edge that asked for a flow must have one.
     injected_from_edges = 0
     if edges is not None:
@@ -169,14 +210,18 @@ def validate(flows_path, intel_path=None, brief_path=None, edges_path=None):
                 # unknown/empty severity → treat as should (advisory) so we don't silently block
                 warnings.append(f"(should) {msg}")
 
-    return errors, warnings, injected_from_edges
+    return errors, warnings, {
+        "injected_from_edges": injected_from_edges,
+        "tasks_covered": tasks_covered,
+        "tasks_total": tasks_total,
+    }
 
 
 def main():
     if len(sys.argv) < 2:
         print("Usage: validate_flows.py <flows.json> [intelligence.json] [brief.json] [scenario-edges.json]", file=sys.stderr)
         sys.exit(1)
-    errors, warnings, injected_from_edges = validate(*sys.argv[1:5])
+    errors, warnings, summary = validate(*sys.argv[1:5])
     if errors:
         print(f"[validate_flows] ✗ Invalid — {len(errors)} error(s):", file=sys.stderr)
         for e in errors:
@@ -187,7 +232,8 @@ def main():
     print("[validate_flows] ✓ Valid")
     print(f"  Navigation : {d.get('navigation_model')}")
     print(f"  Flows      : {len(d.get('flows', []))} · mandatory/injected: {len(d.get('mandatory_flows', []))}")
-    print(f"  Injected   : {len(d.get('mandatory_flows', []))} from directives · {injected_from_edges} from scenario edges (2.5b)")
+    print(f"  Injected   : {len(d.get('mandatory_flows', []))} from directives · {summary['injected_from_edges']} from scenario edges (2.5b)")
+    print(f"  Tasks      : {summary['tasks_covered']}/{summary['tasks_total']} user-triggered core_tasks covered by a flow")
     for w in warnings:
         print(f"  ⚠ {w}")
     sys.exit(0)
