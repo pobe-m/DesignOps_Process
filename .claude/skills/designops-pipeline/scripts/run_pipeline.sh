@@ -244,7 +244,7 @@ fi
 # (hall-of-mirrors) answers; the affinity map feeds pains/opportunities back into research.
 # SIMULATED, honesty-gated — never passed off as real user research.
 INTERVIEWS_JSON="$OUT_DIR/interviews.json"
-if [[ -f "$RESEARCH_JSON" && ! -f "$INTERVIEWS_JSON" ]]; then
+if [[ ! -f "$INTERVIEWS_JSON" ]]; then
   step "Step 2.3b — Interview + Affinity Layer (research → interviews.json)"
   PROMPT_INTERVIEWS="$OUT_DIR/.prompt_interviews.txt"
   cat > "$PROMPT_INTERVIEWS" << PROMPT
@@ -348,7 +348,7 @@ fi
 # altitude ABOVE 3.7's screen-state edges: it discovers MISSING flows before Step 3 (may_inject_flow),
 # then hands those flows to 3.5/3.7. Severity is driven by the directives, not taste.
 SCENARIO_EDGES_JSON="$OUT_DIR/scenario-edges.json"
-if [[ -f "$INTEL_JSON" && ! -f "$SCENARIO_EDGES_JSON" ]]; then
+if [[ ! -f "$SCENARIO_EDGES_JSON" ]]; then
   step "Step 2.5b — Scenario Edge Discovery (intelligence → scenario-edges.json)"
   PROMPT_SE="$OUT_DIR/.prompt_scenario_edges.txt"
   cat > "$PROMPT_SE" << PROMPT
@@ -359,10 +359,16 @@ Walk each of the 10 intelligence dimensions to its boundary/failure scenario (se
 every edge in the dimension it rests on + refs (user_type_ref/task_ref/compliance_ref) that resolve into
 intelligence.json. Severity comes from intelligence, NOT taste: low/zero error_tolerance → its edges are
 must (+ a recovery in suggested_handling); high/safety decision_criticality → must; mandatory compliance
-→ a must edge. Snapshot the floors into meta.driven_by. When an edge implies a whole flow that doesn't
-exist yet, set may_inject_flow.inject=true + a flow_name (Step 3 adds it). A must edge resting on a
-low-confidence inference carries an open_question. Do NOT do screen-state edges (empty/loading/error per
-screen) — that is Step 3.7; this is the product/requirement altitude.
+→ a must edge. Snapshot the floors into meta.driven_by. A must edge resting on a low-confidence inference
+carries an open_question. Do NOT do screen-state edges (empty/loading/error per screen) — that is
+Step 3.7; this is the product/requirement altitude.
+
+BEFORE setting may_inject_flow, read intelligence.design_directives.mandatory_flows. If this scenario
+edge is already covered by an existing mandatory_flow, DO NOT inject a duplicate — set
+may_inject_flow.inject=false and add covered_by_mandatory_flow:"<the mandatory_flow name>" instead.
+Only when the edge implies a whole flow that no mandatory_flow already covers → may_inject_flow.inject=true
++ a flow_name (Step 3 adds it). Same concept, one flow — 2.5b naming a duplicate makes Step 3 build the
+screen twice and Step 3.7 produce two edge sets for the same surface.
 PROMPT
   _generate "$PROMPT_SE" "Step 2.5b — intelligence → scenario edges" "$SCENARIO_EDGES_JSON"
 fi
@@ -503,14 +509,17 @@ Refine each brief.user_flow using design_directives:
   may_inject_flow.inject=true (use its flow_name, source_flow_ref:null) — these are the missing flows 2.5b found
 
 Shape per flows.json: { meta, navigation_model, flows:[{id,name,source_flow_ref,user_type_ref,goal_ref,
-steps:[{n,action,decision,safeguard}],entry,exit,directives_applied:[]}], mandatory_flows:[{name,reason,injected}] }
+task_refs:[],steps:[{n,action,decision,safeguard}],entry,exit,directives_applied:[]}], mandatory_flows:[{name,reason,injected}] }
 Each flow.user_type_ref/goal_ref must resolve into intelligence.json. Every design_directives.mandatory_flow must appear as an injected flow.
+ให้ทุก flow มี task_refs:[] ระบุ core_tasks ids ที่ flow นั้นทำให้สำเร็จ
+core_task ทุกตัวที่ trigger เป็น user หรือ event ต้องถูกอ้างอย่างน้อยหนึ่ง flow
 PROMPT
   _generate "$PROMPT_FLOWS" "Step 3 — refine user flows" "$FLOWS_JSON"
 fi
 if [[ -f "$FLOWS_JSON" ]]; then
   step "Validating flows.json"
-  python3 "$SKILL_DIR/scripts/validate_flows.py" "$FLOWS_JSON" "$INTEL_JSON" "$BRIEF_JSON" || {
+  SE_ARG=""; [[ -f "$SCENARIO_EDGES_JSON" ]] && SE_ARG="$SCENARIO_EDGES_JSON"
+  python3 "$SKILL_DIR/scripts/validate_flows.py" "$FLOWS_JSON" "$INTEL_JSON" "$BRIEF_JSON" ${SE_ARG:+"$SE_ARG"} || {
     err "flows.json validation failed — fix it first, or re-run Step 3"
   }
   log "✓ flows.json valid"
@@ -681,11 +690,14 @@ PROMPT
       err "screen-inventory.json validation failed — fix it first, or re-run Step 3.5"
     }
     log "✓ screen-inventory.json valid"
+  fi
 
-    # ── step 3.7 (Edge-Case Analysis): screens + flows + intelligence → edge-cases.json ──
-    EDGES_JSON="$OUT_DIR/edge-cases.json"
-    PROMPT37_FILE="$OUT_DIR/.prompt_step37.txt"
-    cat > "$PROMPT37_FILE" << PROMPT
+  # ── step 3.7 (Edge-Case Analysis): screens + flows + intelligence → edge-cases.json ──
+  # Stage the prompt unconditionally in the -n "$DS_PATH" branch so it appears in the
+  # AGENT ACTIONS checklist even before screen-inventory.json exists.
+  EDGES_JSON="$OUT_DIR/edge-cases.json"
+  PROMPT37_FILE="$OUT_DIR/.prompt_step37.txt"
+  cat > "$PROMPT37_FILE" << PROMPT
 Read "$SCREENS_JSON" (screens + declared states), "$FLOWS_JSON" (the happy paths), and "$INTEL_JSON"
 (design_directives: error_tolerance, decision_criticality, data_density, guidance_level, safeguard_level),
 then produce "$EDGES_JSON" — the edge cases every Must screen must survive. Follow the taxonomy in
@@ -706,15 +718,14 @@ guidance_level,safeguard_level}}, edge_cases:[{id, ui_state:ideal|empty|error|pa
 correct_dim:conformance|ordering|range|reference|existence|cardinality|time, category, trigger,
 expected_handling, severity:must|should|could, maps_to_screen, maps_to_flow}] }
 PROMPT
-    _generate "$PROMPT37_FILE" "Step 3.7 — Edge-Case Analysis (screens + intelligence → edge-cases)" "$EDGES_JSON"
+  _generate "$PROMPT37_FILE" "Step 3.7 — Edge-Case Analysis (screens + intelligence → edge-cases)" "$EDGES_JSON"
 
-    if [[ -f "$EDGES_JSON" ]]; then
-      step "Validating edge-cases.json"
-      python3 "$SKILL_DIR/scripts/validate_edgecases.py" "$EDGES_JSON" "$SCREENS_JSON" "$FLOWS_JSON" "$INTEL_JSON" || {
-        err "edge-cases.json validation failed — fix it first, or re-run Step 3.7"
-      }
-      log "✓ edge-cases.json valid"
-    fi
+  if [[ -f "$EDGES_JSON" ]]; then
+    step "Validating edge-cases.json"
+    python3 "$SKILL_DIR/scripts/validate_edgecases.py" "$EDGES_JSON" "$SCREENS_JSON" "$FLOWS_JSON" "$INTEL_JSON" || {
+      err "edge-cases.json validation failed — fix it first, or re-run Step 3.7"
+    }
+    log "✓ edge-cases.json valid"
   fi
 
 else
@@ -796,6 +807,9 @@ if [[ "$EXEC_MODE" != "1" && -s "$ACTIONS_FILE" ]]; then
   echo ""
   echo "▶▶ AGENT ACTIONS — generate these now (this session, in order):"
   cat "$ACTIONS_FILE"
+  echo ""
+  echo "  หลังสร้างครบทุกไฟล์แล้ว รัน run_pipeline.sh ด้วย flag ชุดเดิมอีกรอบ"
+  echo "  เพื่อให้ทุก gate ทำงานกับ artifact ที่มีอยู่จริง"
   echo ""
   echo "  Then: python3 $SKILL_DIR/scripts/validate_brief.py $OUT_DIR/brief.json"
   if [[ "$IN_SESSION" != "1" ]]; then

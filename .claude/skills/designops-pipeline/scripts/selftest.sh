@@ -80,10 +80,16 @@ python3 "$VALIDATE" "$TMP/intake_lie.json" >/dev/null 2>&1 && bad "thin idea + h
 echo "[T4] execution model — prep mode stages, no recursion"
 if [ -f "$SAMPLE_TOR" ]; then
   OUT="$TMP/run"; mkdir -p "$OUT"
-  CLAUDECODE=1 /bin/bash "$RUN" --tor "$SAMPLE_TOR" --out "$OUT" >"$OUT/log.txt" 2>&1
+  # tiny DS fixture so Step 3.5 stages without a sibling shadcn checkout
+  DS_FIX="$TMP/ds-fix"; mkdir -p "$DS_FIX/components/ui"
+  : > "$DS_FIX/components/ui/button.tsx"
+  CLAUDECODE=1 /bin/bash "$RUN" --tor "$SAMPLE_TOR" --ds "$DS_FIX" --out "$OUT" >"$OUT/log.txt" 2>&1
   rc=$?
   [ "$rc" = "0" ] && ok "prep run exit 0" || bad "prep run exit $rc"
   [ -f "$OUT/.prompt_step1.txt" ] && [ -f "$OUT/.prompt_intel.txt" ] && [ -f "$OUT/.prompt_aesthetic.txt" ] && [ -f "$OUT/.prompt_flows.txt" ] && [ -f "$OUT/.prompt_step3.txt" ] && ok "step1 + 2.5 + 2.6 + flows + screens prompts staged" || bad "prompts not staged"
+  [ -f "$OUT/.prompt_interviews.txt" ] && ok "2.3b interviews prompt staged (unconditional)" || bad "2.3b interviews prompt not staged"
+  [ -f "$OUT/.prompt_scenario_edges.txt" ] && ok "2.5b scenario-edges prompt staged (unconditional)" || bad "2.5b scenario-edges prompt not staged"
+  [ -f "$OUT/.prompt_step37.txt" ] && ok "3.7 edge-cases prompt staged (unconditional in -n DS_PATH branch)" || bad "3.7 edge-cases prompt not staged"
   grep -q "AGENT ACTIONS" "$OUT/log.txt" && ok "AGENT ACTIONS checklist printed" || bad "no AGENT ACTIONS block"
 else
   bad "sample-tor.md missing — cannot run T4"
@@ -157,6 +163,91 @@ PY
 python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows.json" "$TMP/i2.json" >/dev/null 2>&1 && ok "valid flows → exit 0" || bad "valid flows should pass"
 python3 -c "import json;d=json.load(open('$TMP/flows.json'));d['navigation_model']='single';json.dump(d,open('$TMP/fl_bad.json','w'))"
 python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/fl_bad.json" "$TMP/i2.json" >/dev/null 2>&1 && bad "nav mismatch should fail" || ok "nav_model must match directive → exit 1"
+
+# ── T7.3–T7.9: 2.5b injected flows + primary user_type reverse coverage ───────
+# scenario-edges fixture: SE01 asks Step 3 to inject a flow named "withdraw-consent" (severity=must).
+cat > "$TMP/se_ok.json" <<'PY'
+{"meta":{},"scenario_edges":[
+ {"id":"SE01","dimension":"compliance_requirements","severity":"must","source":"stated","confidence":"high",
+  "may_inject_flow":{"inject":true,"flow_name":"withdraw-consent"}}]}
+PY
+# flows fixture that DOES include a matching flow (name "withdraw consent" — _norm() matches "-" ↔ " ")
+cat > "$TMP/flows_se_ok.json" <<'PY'
+{"meta":{},"navigation_model":"hub_spoke","flows":[
+ {"id":"FL01","name":"Book","source_flow_ref":"UF01","user_type_ref":"UT01","goal_ref":"G01","steps":[{"n":1,"action":"pick"}],"entry":"home","exit":"done","directives_applied":[]},
+ {"id":"FL02","name":"Consent","source_flow_ref":null,"user_type_ref":"UT01","goal_ref":"G01","steps":[{"n":1,"action":"accept"}],"entry":"first","exit":"home","directives_applied":["mandatory"]},
+ {"id":"FL03","name":"Withdraw Consent","source_flow_ref":null,"user_type_ref":"UT01","goal_ref":"G01","steps":[{"n":1,"action":"revoke"}],"entry":"settings","exit":"home","directives_applied":["injected-2.5b"]}],
+ "mandatory_flows":[{"name":"consent","reason":"PDPA","injected":true}]}
+PY
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_se_ok.json" "$TMP/i2.json" "" "$TMP/se_ok.json" >/dev/null 2>&1 && ok "T7.3 must-injected flow present → exit 0" || bad "T7.3 must-injected flow present should pass"
+# T7.4: same SE (must) but drop the matching flow → error
+python3 -c "import json;d=json.load(open('$TMP/flows_se_ok.json'));d['flows']=[f for f in d['flows'] if f['id']!='FL03'];json.dump(d,open('$TMP/flows_se_missing.json','w'))"
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_se_missing.json" "$TMP/i2.json" "" "$TMP/se_ok.json" >/dev/null 2>&1 && bad "T7.4 missing must-injected flow should fail" || ok "T7.4 missing must-injected flow → exit 1"
+# T7.5: severity=could + no matching flow → warning only, still exit 0
+python3 -c "import json;d=json.load(open('$TMP/se_ok.json'));d['scenario_edges'][0]['severity']='could';json.dump(d,open('$TMP/se_could.json','w'))"
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_se_missing.json" "$TMP/i2.json" "" "$TMP/se_could.json" >/dev/null 2>&1 && ok "T7.5 could-severity missing flow → exit 0 (warn only)" || bad "T7.5 could-severity should not block"
+# T7.6: inject=true but flow_name is empty → error
+python3 -c "import json;d=json.load(open('$TMP/se_ok.json'));d['scenario_edges'][0]['may_inject_flow']['flow_name']='';json.dump(d,open('$TMP/se_empty.json','w'))"
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_se_ok.json" "$TMP/i2.json" "" "$TMP/se_empty.json" >/dev/null 2>&1 && bad "T7.6 empty flow_name should fail" || ok "T7.6 inject=true + empty flow_name → exit 1"
+# T7.7: intel has 2 primary user_types (UT01, UT02); flows only reference UT01 → error
+cat > "$TMP/i2_two_primary.json" <<'PY'
+{"meta":{},"user_types":[
+  {"id":"UT01","name":"Op","role_category":"operator","relationship":"primary"},
+  {"id":"UT02","name":"Ward nurse","role_category":"nurse","relationship":"primary"}],
+ "user_goals":[{"id":"G01"}],"core_tasks":[],
+ "workflow_complexity":{},"data_density":{},"error_tolerance":{},"accessibility_needs":{},
+ "compliance_requirements":[],"decision_criticality":{},
+ "design_directives":{"navigation_model":"hub_spoke","mandatory_flows":["consent"]}}
+PY
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows.json" "$TMP/i2_two_primary.json" >/dev/null 2>&1 && bad "T7.7 uncovered primary user_type should fail" || ok "T7.7 primary user_type without a flow → exit 1"
+# T7.8: uncovered user_type is role_category=system → exempt, still exit 0
+python3 -c "import json;d=json.load(open('$TMP/i2_two_primary.json'));d['user_types'][1]['role_category']='system';json.dump(d,open('$TMP/i2_system_uncovered.json','w'))"
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows.json" "$TMP/i2_system_uncovered.json" >/dev/null 2>&1 && ok "T7.8 uncovered system user_type is exempt → exit 0" || bad "T7.8 system role_category should be exempt"
+# T7.9: don't pass scenario-edges.json → whole 2.5b check is skipped → exit 0
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_se_missing.json" "$TMP/i2.json" >/dev/null 2>&1 && ok "T7.9 no scenario-edges arg → exit 0 (2.5b check skipped)" || bad "T7.9 omitting scenario-edges should skip the check"
+
+# ── T7.10–T7.14: task_refs coverage (core_tasks → flow traceability) ─────────
+# intel with 2 user-triggered core_tasks (T01 user, T02 event) + 1 scheduled (T03).
+cat > "$TMP/i2_tasks.json" <<'PY'
+{"meta":{},"user_types":[{"id":"UT01","name":"Op","role_category":"operator","relationship":"primary"}],
+ "user_goals":[{"id":"G01"}],
+ "core_tasks":[
+   {"id":"T01","name":"submit order","trigger":"user"},
+   {"id":"T02","name":"react to alert","trigger":"event"},
+   {"id":"T03","name":"nightly sync","trigger":"scheduled"}],
+ "workflow_complexity":{},"data_density":{},"error_tolerance":{},"accessibility_needs":{},
+ "compliance_requirements":[],"decision_criticality":{},
+ "design_directives":{"navigation_model":"hub_spoke","mandatory_flows":["consent"]}}
+PY
+# T7.10: task_refs cover BOTH user-triggered tasks (T01 + T02) → exit 0
+cat > "$TMP/flows_tasks_ok.json" <<'PY'
+{"meta":{},"navigation_model":"hub_spoke","flows":[
+ {"id":"FL01","name":"Book","source_flow_ref":"UF01","user_type_ref":"UT01","goal_ref":"G01","task_refs":["T01"],"steps":[{"n":1,"action":"pick"}],"entry":"home","exit":"done","directives_applied":[]},
+ {"id":"FL02","name":"Consent","source_flow_ref":null,"user_type_ref":"UT01","goal_ref":"G01","task_refs":["T02"],"steps":[{"n":1,"action":"accept"}],"entry":"first","exit":"home","directives_applied":["mandatory"]}],
+ "mandatory_flows":[{"name":"consent","reason":"PDPA","injected":true}]}
+PY
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_tasks_ok.json" "$TMP/i2_tasks.json" >/dev/null 2>&1 && ok "T7.10 task_refs cover every user-triggered task → exit 0" || bad "T7.10 full task coverage should pass"
+# T7.11: T02 is trigger:user but no flow references it → error
+python3 -c "import json;d=json.load(open('$TMP/flows_tasks_ok.json'));d['flows'][1]['task_refs']=[];json.dump(d,open('$TMP/flows_tasks_gap.json','w'))"
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_tasks_gap.json" "$TMP/i2_tasks.json" >/dev/null 2>&1 && bad "T7.11 uncovered user-triggered task should fail" || ok "T7.11 user-triggered task without a flow → exit 1"
+# T7.12: only user-triggered task (T01) is covered; T03 stays uncovered but trigger:scheduled → exempt → exit 0
+cat > "$TMP/i2_tasks_scheduled.json" <<'PY'
+{"meta":{},"user_types":[{"id":"UT01","name":"Op","role_category":"operator","relationship":"primary"}],
+ "user_goals":[{"id":"G01"}],
+ "core_tasks":[
+   {"id":"T01","name":"submit order","trigger":"user"},
+   {"id":"T03","name":"nightly sync","trigger":"scheduled"}],
+ "workflow_complexity":{},"data_density":{},"error_tolerance":{},"accessibility_needs":{},
+ "compliance_requirements":[],"decision_criticality":{},
+ "design_directives":{"navigation_model":"hub_spoke","mandatory_flows":["consent"]}}
+PY
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_tasks_gap.json" "$TMP/i2_tasks_scheduled.json" >/dev/null 2>&1 && ok "T7.12 uncovered scheduled task is exempt → exit 0" || bad "T7.12 scheduled trigger should be exempt"
+# T7.13: task_refs points at an id that doesn't exist in intelligence.core_tasks → error
+python3 -c "import json;d=json.load(open('$TMP/flows_tasks_ok.json'));d['flows'][0]['task_refs']=['T09'];json.dump(d,open('$TMP/flows_tasks_bogus.json','w'))"
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_tasks_bogus.json" "$TMP/i2_tasks.json" >/dev/null 2>&1 && bad "T7.13 bogus task_refs id should fail" || ok "T7.13 unresolved task_refs id → exit 1"
+# T7.14: no flow declares task_refs at all → warning only, exit 0
+python3 -c "import json;d=json.load(open('$TMP/flows_tasks_ok.json'));[f.pop('task_refs',None) for f in d['flows']];json.dump(d,open('$TMP/flows_no_task_refs.json','w'))"
+python3 "$SCRIPTS_DIR/validate_flows.py" "$TMP/flows_no_task_refs.json" "$TMP/i2_tasks.json" >/dev/null 2>&1 && ok "T7.14 no task_refs anywhere → exit 0 (warn only)" || bad "T7.14 unopted task_refs should warn not block"
 
 # ── T8. Screens gate (Step 3.5) ───────────────────────────────────────────────
 echo "[T8] screens gate — valid passes, coverage gap fails"
@@ -480,6 +571,40 @@ python3 -c "import json;d=json.load(open('$TMP/scenario_edges.json'));d['scenari
 python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/scenario_edges_bad.json" "$TMP/intel_min.json" >/dev/null 2>&1 && bad "low error_tolerance edge must be 'must'" || ok "severity floor (error_tolerance low ⇒ must) → exit 1 (BLOCKED)"
 python3 -c "import json;d=json.load(open('$TMP/scenario_edges.json'));d['scenario_edges'][0]['task_ref']='T99';json.dump(d,open('$TMP/scenario_edges_ref.json','w'))"
 python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/scenario_edges_ref.json" "$TMP/intel_min.json" >/dev/null 2>&1 && bad "unresolved task_ref should fail" || ok "scenario edge ref resolves into intelligence → exit 1 (BLOCKED)"
+
+# Phase 2.5: covered_by_mandatory_flow — dedupe 2.5 mandatory_flows vs 2.5b flow_name
+cat > "$TMP/intel_mf.json" <<'JSON'
+{ "user_types": [], "core_tasks": [{ "id": "T01" }], "compliance_requirements": [],
+  "error_tolerance": { "overall": "low" }, "decision_criticality": { "overall": "low" },
+  "design_directives": { "mandatory_flows": ["release-result-with-undo","consent"] } }
+JSON
+# (a) inject=false + covered_by_mandatory_flow that resolves → exit 0
+cat > "$TMP/se_covered_ok.json" <<'JSON'
+{ "meta": { "schema_version": "1.0", "overall_confidence": "medium" },
+  "scenario_edges": [{ "id": "SE01", "dimension": "error_tolerance", "scenario": "wrong-patient release",
+    "severity": "must", "suggested_handling": "confirm + undo", "task_ref": "T01",
+    "source": "inferred", "confidence": "medium",
+    "may_inject_flow": { "inject": false },
+    "covered_by_mandatory_flow": "release-result-with-undo" }] }
+JSON
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/se_covered_ok.json" "$TMP/intel_mf.json" >/dev/null 2>&1 && ok "covered_by_mandatory_flow resolves → exit 0" || bad "covered_by resolves should pass"
+# (b) covered_by_mandatory_flow that DOESN'T resolve → exit 1
+python3 -c "import json;d=json.load(open('$TMP/se_covered_ok.json'));d['scenario_edges'][0]['covered_by_mandatory_flow']='does-not-exist';json.dump(d,open('$TMP/se_covered_bad.json','w'))"
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/se_covered_bad.json" "$TMP/intel_mf.json" >/dev/null 2>&1 && bad "unresolved covered_by should fail" || ok "covered_by_mandatory_flow unresolved → exit 1 (BLOCKED)"
+# (c) inject=true AND covered_by both set → exit 1 (conflict)
+python3 -c "import json;d=json.load(open('$TMP/se_covered_ok.json'));d['scenario_edges'][0]['may_inject_flow']={'inject':True,'flow_name':'x'};d['scenario_edges'][0]['covered_by_mandatory_flow']='release-result-with-undo';json.dump(d,open('$TMP/se_conflict.json','w'))"
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/se_conflict.json" "$TMP/intel_mf.json" >/dev/null 2>&1 && bad "inject=true + covered_by should fail" || ok "inject=true and covered_by both set → exit 1 (BLOCKED)"
+# (d) inject=true + flow_name shares ≥2 tokens with mandatory_flow → warn (exit 0)
+cat > "$TMP/se_overlap.json" <<'JSON'
+{ "meta": { "schema_version": "1.0", "overall_confidence": "medium" },
+  "scenario_edges": [{ "id": "SE01", "dimension": "error_tolerance", "scenario": "wrong-patient release",
+    "severity": "must", "suggested_handling": "confirm + undo", "task_ref": "T01",
+    "source": "inferred", "confidence": "medium",
+    "may_inject_flow": { "inject": true, "flow_name": "undo-release-window" } }] }
+JSON
+python3 "$SCRIPTS_DIR/validate_scenario_edges.py" "$TMP/se_overlap.json" "$TMP/intel_mf.json" > "$TMP/se_overlap.out" 2>&1
+rc=$?
+{ [ "$rc" = "0" ] && grep -q "possible duplicate concept" "$TMP/se_overlap.out"; } && ok "flow_name overlap with mandatory_flow → exit 0 + warning" || bad "token-overlap should warn (not block) — rc=$rc"
 
 # feedback loop (4.9) — valid scored findings; score-math mismatch fails; systemic needs reach ≥ 2
 cat > "$TMP/test_findings.json" <<'JSON'
