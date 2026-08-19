@@ -510,7 +510,8 @@ PROMPT
 fi
 if [[ -f "$FLOWS_JSON" ]]; then
   step "Validating flows.json"
-  python3 "$SKILL_DIR/scripts/validate_flows.py" "$FLOWS_JSON" "$INTEL_JSON" "$BRIEF_JSON" || {
+  SE_ARG=""; [[ -f "$SCENARIO_EDGES_JSON" ]] && SE_ARG="$SCENARIO_EDGES_JSON"
+  python3 "$SKILL_DIR/scripts/validate_flows.py" "$FLOWS_JSON" "$INTEL_JSON" "$BRIEF_JSON" ${SE_ARG:+"$SE_ARG"} || {
     err "flows.json validation failed — fix it first, or re-run Step 3"
   }
   log "✓ flows.json valid"
