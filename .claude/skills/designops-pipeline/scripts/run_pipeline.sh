@@ -326,6 +326,18 @@ jobs_to_be_done → user_goals, pain_points/behavioral_assumptions → error_tol
 user_type.persona_ref to the research persona it derives from — every primary persona must become
 >=1 user_type (the gate enforces this coverage when research.json is present). If
 "$COMPETITIVE_JSON" exists, use its feeds for data_density + expected patterns.
+
+Research → goal traceability (when research.json exists): set user_goals[].jtbd_ref to the
+research jobs_to_be_done id the goal comes from, and user_goals[].pain_refs to the pain_points
+the goal relieves. Every pain_point with severity=high MUST be referenced by at least one goal
+(a researched high-severity pain that no goal addresses is a dropped problem).
+
+Compliance → task traceability (seam-2): give every core_task that fulfils a regulatory
+obligation a compliance_refs:[] listing the compliance_requirements ids it serves. Every
+mandatory compliance either needs a task with compliance_refs OR a design_directives.
+mandatory_flow named after it — otherwise the gate warns that the compliance has no
+user-facing path. Backend-only rules (retention, encryption at rest) may legitimately have
+no UI — the warning is a nudge, not a block.
 PROMPT
   _generate "$PROMPT_INTEL" "Step 2.5 — brief → product intelligence" "$INTEL_JSON"
 fi

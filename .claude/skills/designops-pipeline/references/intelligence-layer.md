@@ -46,11 +46,16 @@ consume — so UI decisions come from *what the product needs*, not from a featu
     "source": "stated|inferred", "evidence": ["personas[0]","F03"], "confidence": "high|medium|low" }],
 
   "user_goals": [{ "id": "G01", "user_type_ref": "UT01", "statement": "<outcome, no UI nouns>",
-    "job_type": "functional|emotional|social", "priority": "must|should|could", "success_signal": "", "evidence": [] }],
+    "job_type": "functional|emotional|social", "priority": "must|should|could", "success_signal": "",
+    "jtbd_ref": "JTBD01",        // NEW optional — trace back to research.jobs_to_be_done id
+    "pain_refs": ["PP01"],       // NEW optional — pain_points ids this goal relieves (opt-in coverage)
+    "evidence": [] }],
 
   "core_tasks": [{ "id": "T01", "name": "verb_object", "user_type_ref": "UT01", "goal_ref": "G01",
     "frequency": "rare|occasional|frequent|constant", "trigger": "user|scheduled|event|system",
-    "steps_estimate": 0, "evidence": [] }],
+    "steps_estimate": 0,
+    "compliance_refs": ["C01"],  // NEW optional — compliance_requirements ids this task serves
+    "evidence": [] }],
 
   "workflow_complexity": { "overall_score": 3, "per_workflow": [{ "flow_ref": "UF01",
     "linearity": "linear|branching|parallel", "actor_count": 1, "step_band": "1-3|4-7|8+",
@@ -105,6 +110,9 @@ consume — so UI decisions come from *what the product needs*, not from a featu
 | every goal/task `*_ref` resolves; every `flow_ref` → `brief.user_flows` |
 | **when `research.json` is provided ⇒ every `user_type` carries a `persona_ref` that resolves to a real persona id in research.json** (2.5 user type traces back to a 2.3 persona — no orphan segments invented at the intelligence layer) |
 | **when `research.json` is provided ⇒ every `primary` persona is covered by ≥1 `user_type.persona_ref`** (reverse coverage — a primary persona that never becomes a user type is a dropped audience) |
+| **when `research.json` is provided and any `user_goal` declares `pain_refs` ⇒ every `pain_point` with `severity=high` is referenced by ≥1 goal** (a researched high-severity pain that no goal addresses is a dropped problem) |
+| **every `user_goals[].jtbd_ref` / `pain_refs[]` resolves to a real id in research.json** (referential integrity always on when the field is used) |
+| **every `core_tasks[].compliance_refs[]` resolves to a real id in `compliance_requirements`** (referential integrity — unresolved ref = broken traceability, always on when the field is used) |
 
 **Confidence gating:** if `meta.overall_confidence = low`, the validator emits
 `constrain_downstream=true` → Step 3/4 should produce wireframe-level output + force a human gate
