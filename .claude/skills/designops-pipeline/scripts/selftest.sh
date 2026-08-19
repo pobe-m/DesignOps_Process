@@ -80,10 +80,16 @@ python3 "$VALIDATE" "$TMP/intake_lie.json" >/dev/null 2>&1 && bad "thin idea + h
 echo "[T4] execution model — prep mode stages, no recursion"
 if [ -f "$SAMPLE_TOR" ]; then
   OUT="$TMP/run"; mkdir -p "$OUT"
-  CLAUDECODE=1 /bin/bash "$RUN" --tor "$SAMPLE_TOR" --out "$OUT" >"$OUT/log.txt" 2>&1
+  # tiny DS fixture so Step 3.5 stages without a sibling shadcn checkout
+  DS_FIX="$TMP/ds-fix"; mkdir -p "$DS_FIX/components/ui"
+  : > "$DS_FIX/components/ui/button.tsx"
+  CLAUDECODE=1 /bin/bash "$RUN" --tor "$SAMPLE_TOR" --ds "$DS_FIX" --out "$OUT" >"$OUT/log.txt" 2>&1
   rc=$?
   [ "$rc" = "0" ] && ok "prep run exit 0" || bad "prep run exit $rc"
   [ -f "$OUT/.prompt_step1.txt" ] && [ -f "$OUT/.prompt_intel.txt" ] && [ -f "$OUT/.prompt_aesthetic.txt" ] && [ -f "$OUT/.prompt_flows.txt" ] && [ -f "$OUT/.prompt_step3.txt" ] && ok "step1 + 2.5 + 2.6 + flows + screens prompts staged" || bad "prompts not staged"
+  [ -f "$OUT/.prompt_interviews.txt" ] && ok "2.3b interviews prompt staged (unconditional)" || bad "2.3b interviews prompt not staged"
+  [ -f "$OUT/.prompt_scenario_edges.txt" ] && ok "2.5b scenario-edges prompt staged (unconditional)" || bad "2.5b scenario-edges prompt not staged"
+  [ -f "$OUT/.prompt_step37.txt" ] && ok "3.7 edge-cases prompt staged (unconditional in -n DS_PATH branch)" || bad "3.7 edge-cases prompt not staged"
   grep -q "AGENT ACTIONS" "$OUT/log.txt" && ok "AGENT ACTIONS checklist printed" || bad "no AGENT ACTIONS block"
 else
   bad "sample-tor.md missing — cannot run T4"

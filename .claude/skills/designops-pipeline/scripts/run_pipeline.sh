@@ -244,7 +244,7 @@ fi
 # (hall-of-mirrors) answers; the affinity map feeds pains/opportunities back into research.
 # SIMULATED, honesty-gated — never passed off as real user research.
 INTERVIEWS_JSON="$OUT_DIR/interviews.json"
-if [[ -f "$RESEARCH_JSON" && ! -f "$INTERVIEWS_JSON" ]]; then
+if [[ ! -f "$INTERVIEWS_JSON" ]]; then
   step "Step 2.3b — Interview + Affinity Layer (research → interviews.json)"
   PROMPT_INTERVIEWS="$OUT_DIR/.prompt_interviews.txt"
   cat > "$PROMPT_INTERVIEWS" << PROMPT
@@ -348,7 +348,7 @@ fi
 # altitude ABOVE 3.7's screen-state edges: it discovers MISSING flows before Step 3 (may_inject_flow),
 # then hands those flows to 3.5/3.7. Severity is driven by the directives, not taste.
 SCENARIO_EDGES_JSON="$OUT_DIR/scenario-edges.json"
-if [[ -f "$INTEL_JSON" && ! -f "$SCENARIO_EDGES_JSON" ]]; then
+if [[ ! -f "$SCENARIO_EDGES_JSON" ]]; then
   step "Step 2.5b — Scenario Edge Discovery (intelligence → scenario-edges.json)"
   PROMPT_SE="$OUT_DIR/.prompt_scenario_edges.txt"
   cat > "$PROMPT_SE" << PROMPT
@@ -681,11 +681,14 @@ PROMPT
       err "screen-inventory.json validation failed — fix it first, or re-run Step 3.5"
     }
     log "✓ screen-inventory.json valid"
+  fi
 
-    # ── step 3.7 (Edge-Case Analysis): screens + flows + intelligence → edge-cases.json ──
-    EDGES_JSON="$OUT_DIR/edge-cases.json"
-    PROMPT37_FILE="$OUT_DIR/.prompt_step37.txt"
-    cat > "$PROMPT37_FILE" << PROMPT
+  # ── step 3.7 (Edge-Case Analysis): screens + flows + intelligence → edge-cases.json ──
+  # Stage the prompt unconditionally in the -n "$DS_PATH" branch so it appears in the
+  # AGENT ACTIONS checklist even before screen-inventory.json exists.
+  EDGES_JSON="$OUT_DIR/edge-cases.json"
+  PROMPT37_FILE="$OUT_DIR/.prompt_step37.txt"
+  cat > "$PROMPT37_FILE" << PROMPT
 Read "$SCREENS_JSON" (screens + declared states), "$FLOWS_JSON" (the happy paths), and "$INTEL_JSON"
 (design_directives: error_tolerance, decision_criticality, data_density, guidance_level, safeguard_level),
 then produce "$EDGES_JSON" — the edge cases every Must screen must survive. Follow the taxonomy in
@@ -706,15 +709,14 @@ guidance_level,safeguard_level}}, edge_cases:[{id, ui_state:ideal|empty|error|pa
 correct_dim:conformance|ordering|range|reference|existence|cardinality|time, category, trigger,
 expected_handling, severity:must|should|could, maps_to_screen, maps_to_flow}] }
 PROMPT
-    _generate "$PROMPT37_FILE" "Step 3.7 — Edge-Case Analysis (screens + intelligence → edge-cases)" "$EDGES_JSON"
+  _generate "$PROMPT37_FILE" "Step 3.7 — Edge-Case Analysis (screens + intelligence → edge-cases)" "$EDGES_JSON"
 
-    if [[ -f "$EDGES_JSON" ]]; then
-      step "Validating edge-cases.json"
-      python3 "$SKILL_DIR/scripts/validate_edgecases.py" "$EDGES_JSON" "$SCREENS_JSON" "$FLOWS_JSON" "$INTEL_JSON" || {
-        err "edge-cases.json validation failed — fix it first, or re-run Step 3.7"
-      }
-      log "✓ edge-cases.json valid"
-    fi
+  if [[ -f "$EDGES_JSON" ]]; then
+    step "Validating edge-cases.json"
+    python3 "$SKILL_DIR/scripts/validate_edgecases.py" "$EDGES_JSON" "$SCREENS_JSON" "$FLOWS_JSON" "$INTEL_JSON" || {
+      err "edge-cases.json validation failed — fix it first, or re-run Step 3.7"
+    }
+    log "✓ edge-cases.json valid"
   fi
 
 else
@@ -796,6 +798,9 @@ if [[ "$EXEC_MODE" != "1" && -s "$ACTIONS_FILE" ]]; then
   echo ""
   echo "▶▶ AGENT ACTIONS — generate these now (this session, in order):"
   cat "$ACTIONS_FILE"
+  echo ""
+  echo "  หลังสร้างครบทุกไฟล์แล้ว รัน run_pipeline.sh ด้วย flag ชุดเดิมอีกรอบ"
+  echo "  เพื่อให้ทุก gate ทำงานกับ artifact ที่มีอยู่จริง"
   echo ""
   echo "  Then: python3 $SKILL_DIR/scripts/validate_brief.py $OUT_DIR/brief.json"
   if [[ "$IN_SESSION" != "1" ]]; then
