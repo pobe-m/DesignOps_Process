@@ -7,7 +7,7 @@ with the users, edge cases, accessibility and design quality worked out automati
 
 Powered by Claude Code · Next.js 16 · shadcn/ui · Tailwind v4
 
-`Any intent → brief` · `WCAG-gated` · `138-brand aesthetic library` · `11-gate audit` · `161/161 selftest` · `builds off your shadcn DS — no token`
+`Any intent → brief` · `WCAG-gated` · `138-brand aesthetic library` · `11-gate audit` · `191/191 selftest` · `builds off your shadcn DS — no token`
 
 </div>
 
@@ -136,7 +136,7 @@ cd output/prototype && npm run dev   # → http://localhost:3000
 | **2.5** | Product Intelligence — 10 dims → `design_directives` (+ feature + persona coverage) | `intelligence.json` | `validate_intelligence.py` |
 | **2.5b** | Scenario Edge Discovery — 10 dims → their edge; injects missing flows into Step 3 | `scenario-edges.json` | `validate_scenario_edges.py` |
 | **2.6** | Aesthetic Direction — full identity theme + typography hierarchy | `aesthetic.json` · `brand.config.json` | `validate_aesthetic.py` |
-| **3** | Refine user flows from directives (+ injected 2.5b flows) | `flows.json` | `validate_flows.py` |
+| **3** | Refine user flows from directives (+ injected 2.5b flows) | `flows.json` | `validate_flows.py` — nav/refs + 2.5b `must`-injected flows landed + primary `user_type` reverse coverage + `task_refs` coverage when opted in |
 | **3.5** | Screens from flows + DS mapping + `image_needs` (+ feature/scoring coverage) | `screen-inventory.json` · `design-first-draft.md` | `validate_screens.py` |
 | **3.7** | Edge-Case Analysis (UI Stack × CORRECT) per Must screen | `edge-cases.json` | `validate_edgecases.py` |
 | **4** | Scaffold the Next.js prototype (+ free-license asset-prep) | `output/prototype/` | — |
@@ -326,7 +326,7 @@ Designops-project-test/
 │   │   ├── validate_{aesthetic,flows,screens,edgecases,usability,test_findings}.py
 │   │   ├── audit_prototype.py            #    Step 4.7 gate (11: token·WCAG·copy·contracts·font·theme·directive·screen·edge·fontfid·axis)
 │   │   ├── lint_{hardcodes,component_contracts,font_imports,theme_fidelity,…}.py
-│   │   └── selftest.sh                   #    161/161 regression guard
+│   │   └── selftest.sh                   #    191/191 regression guard
 │   └── references/
 │       ├── aesthetics/                   #    🎨 138-brand library + taste + contrast.py
 │       ├── tokens/                       #    DTCG token foundation + validators (brandkit)
@@ -391,7 +391,7 @@ is the DS, and **Model B keeps it self-contained**:
 ## 🧪 Tests
 
 ```bash
-bash .claude/skills/designops-pipeline/scripts/selftest.sh        # 161/161, runs on macOS stock bash 3.2
+bash .claude/skills/designops-pipeline/scripts/selftest.sh        # 191/191, runs on macOS stock bash 3.2
 ```
 
 Covers bash-3.2 compatibility, every validator (valid passes / invalid fails), the full 11-gate audit

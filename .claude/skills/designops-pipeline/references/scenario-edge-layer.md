@@ -64,6 +64,9 @@ the agent's imagination. Enumerate the ones the product's dimensions make real:
     "severity": "must|should|could",        // driven by directives, NOT taste (see floors)
     "suggested_handling": "<the flow/screen/guard that would handle it>",
     "may_inject_flow": { "inject": true, "flow_name": "withdraw-consent" },  // → Step 3 adds it
+    "covered_by_mandatory_flow": "withdraw-consent",  // optional — set instead of inject=true when the
+                                                        // edge is already covered by an existing
+                                                        // design_directives.mandatory_flow (dedupe seam)
     "user_type_ref": "UT01",                // optional refs into intelligence.json (resolve when provided)
     "task_ref": "T03",
     "compliance_ref": "C01",
@@ -74,7 +77,14 @@ the agent's imagination. Enumerate the ones the product's dimensions make real:
 
 `may_inject_flow.inject == true` is the **seam** into Step 3: each becomes a mandatory/injected flow
 (`source_flow_ref: null`), which then flows to 3.5 screens and 3.7 UI-state edges. That is how a scenario
-question ("what if consent is withdrawn?") becomes a real screen instead of a silent gap.
+question ("what if consent is withdrawn?") becomes a real screen instead of a silent gap. **The seam is
+now gated by `validate_flows.py` itself, not just this prompt** — a `severity:"must"` edge whose
+`flow_name` never lands in `flows.json` blocks the flows gate (`should`/`could` warn only).
+
+Before setting `may_inject_flow.inject=true`, check `intelligence.design_directives.mandatory_flows`.
+If this edge is already covered by an existing directive → set `inject=false` and add
+`covered_by_mandatory_flow:"<name>"` instead. Same concept named twice makes Step 3 build the screen
+twice and Step 3.7 emit two edge sets for what is really one surface.
 
 ---
 
@@ -97,6 +107,9 @@ Mirrors 3.7 rule 2: a high-stakes product can't quietly mark its scenario edges 
 | ids unique; `severity` ∈ {must, should, could}; `source`/`confidence` valid enums |
 | when `intelligence.json` is provided ⇒ `user_type_ref` → `user_types`, `task_ref` → `core_tasks`, `compliance_ref` → `compliance_requirements` all resolve |
 | `may_inject_flow.inject == true` ⇒ non-empty `flow_name` |
+| `may_inject_flow.inject == true` AND `covered_by_mandatory_flow` set ⇒ **error** (pick one — if the edge is already covered, set `inject=false`) |
+| when `intelligence.json` is provided ⇒ `covered_by_mandatory_flow` (if set) resolves to a real name in `design_directives.mandatory_flows` (via `_norm`) |
+| **warning** (not error): `may_inject_flow.inject=true` whose `flow_name` shares ≥2 `_norm`-tokens with any `mandatory_flow` — concept identity is a human call; nudges the author to use `covered_by_mandatory_flow` if they are the same flow |
 
 **Warnings (quality):** a high-signal dimension with no edge (`error_tolerance ∈ {low,zero}` /
 `decision_criticality ∈ {high,safety_critical}` / any mandatory compliance) — likely a coverage gap.
@@ -121,9 +134,11 @@ OUTPUT: scenario-edges.json per the shape above.
    must (+ a recovery in suggested_handling); high/safety decision_criticality → must; mandatory
    compliance → a must edge. Snapshot the floors used into meta.driven_by.
 4. FEED STEP 3. When an edge implies a whole flow that doesn't exist yet (withdraw consent, reverse a
-   transaction, resume-on-another-device), set may_inject_flow.inject=true + a flow_name.
+   transaction, resume-on-another-device), CHECK `intelligence.design_directives.mandatory_flows` FIRST.
+   If the edge is already covered by an existing directive → set `may_inject_flow.inject=false` and add
+   `covered_by_mandatory_flow:"<name>"`. Only when nothing covers it → `inject=true` + a `flow_name`.
 5. BE HONEST. A must-severity edge resting on a low-confidence inference carries an open_question.
 
-Process: for each of the 10 dimensions → derive its edge(s) → set severity from the floors → mark
-may_inject_flow where a new flow is implied → open_question for every low-confidence must.
+Process: for each of the 10 dimensions → derive its edge(s) → set severity from the floors → reconcile
+with mandatory_flows (covered_by vs inject) → open_question for every low-confidence must.
 ```
