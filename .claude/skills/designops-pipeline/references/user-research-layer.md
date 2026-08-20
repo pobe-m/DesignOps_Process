@@ -77,6 +77,12 @@ pain points + assumptions → `error_tolerance` / `open_questions`, **`opportuni
 (a high-impact opportunity can become a `mandatory_flow` or a promoted feature)**. Evidence-backed hints
 let the intelligence layer raise its own confidence; inferred hints stay hypotheses.
 
+The seam is now **gated**, not just prompted: `validate_intelligence.py` resolves every
+`user_goals[].jtbd_ref` / `pain_refs[]` back to real ids here, and once any goal opts into `pain_refs`,
+every `pain_points[]` with `severity="high"` must be referenced by ≥1 goal — a researched high-severity
+pain that no goal addresses is a dropped problem. Medium/low pains stay optional (the coverage rule is
+high-only so `should`/`could` pains don't become gate noise).
+
 `current_state_journey` is **conditional, not mandatory** — it earns its place only when the product is
 flow-shaped (a redesign, or a task users already perform via a manual workaround). It is the near-free
 re-projection of the same pains along a timeline: it does not add new facts, it *locates* them and turns

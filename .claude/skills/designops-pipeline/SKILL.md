@@ -432,7 +432,17 @@ that Step 3 consumes:
 
 `User Types · User Expertise · User Goals · Core Tasks · Workflow Complexity · Data Density · Error Tolerance · Accessibility Needs · Compliance Requirements · Decision Criticality`
 
-```
+```jsonc
+user_goals: [{ id, user_type_ref, statement, job_type, priority, success_signal,
+               feature_refs: ["F01"],
+               jtbd_ref: "JTBD01",     // optional — trace back to research.jobs_to_be_done
+               pain_refs: ["PP01"],    // optional — pain_points this goal relieves (opt-in coverage)
+               evidence: [] }]
+core_tasks: [{ id, name, user_type_ref, goal_ref, frequency, trigger, steps_estimate,
+               feature_refs: ["F01"],
+               compliance_refs: ["C01"], // optional — compliance_requirements this task serves
+               evidence: [] }]
+
 design_directives = { density_target 1-5, guidance_level, safeguard_level,
                       a11y_target, mandatory_flows[], navigation_model, trust_emphasis }
 ```
@@ -440,7 +450,8 @@ design_directives = { density_target 1-5, guidance_level, safeguard_level,
 Rules: infer (don't restate); **evidence or silence** (ungrounded → `confidence:low` + open_question);
 scales not prose; obey the **cross-dimension invariants** (e.g. `safety_critical ⇒ error_tolerance ∈ {low,zero}`; public-sector ⇒ AAA).
 
-Gate: `python3 scripts/validate_intelligence.py {OUTPUT_DIR}/intelligence.json {OUTPUT_DIR}/brief.json`.
+Gate: `python3 scripts/validate_intelligence.py {OUTPUT_DIR}/intelligence.json {OUTPUT_DIR}/brief.json {OUTPUT_DIR}/research.json`
+(when `research.json` is present the gate also enforces `user_type ↔ persona` coverage, resolves `user_goals[].jtbd_ref` / `pain_refs`, and requires every `severity=high` pain to be referenced by ≥1 goal once any goal opts into `pain_refs`; every `core_tasks[].compliance_refs` must resolve into `compliance_requirements`; every mandatory compliance without a task ref AND no name-matching `mandatory_flow` → warning).
 If `overall_confidence=low`, the gate emits `constrain_downstream=true` → Step 3/4 produce wireframe-level output + a human gate.
 
 > This replaces the old fixed industry preset — `design_directives` is derived per-project, so any industry is expressible without code changes.
@@ -456,16 +467,18 @@ Refine each flow:
 - `safeguard_level` → inject confirm / preview / undo steps on risky actions (`step.safeguard`)
 - `mandatory_flows` → **add an injected flow** per directive (consent, privacy_notice…) with `source_flow_ref:null`
 - `decision_criticality` decision points → mark `step.decision:true` where the user commits a high-stakes choice
+- `scenario-edges.json` (2.5b) → add an injected flow for each `may_inject_flow.inject=true` (unless the edge points at an existing directive via `covered_by_mandatory_flow`)
 
 ```jsonc
 flows.json = { meta, navigation_model,
   flows: [{ id, name, source_flow_ref, user_type_ref, goal_ref,
+            task_refs: ["T01"],   // optional — core_tasks this flow lands (opt-in coverage)
             steps: [{ n, action, decision, safeguard }], entry, exit, directives_applied: [] }],
   mandatory_flows: [{ name, reason, injected }] }
 ```
 
-Gate: `validate_flows.py {OUTPUT_DIR}/flows.json {OUTPUT_DIR}/intelligence.json {OUTPUT_DIR}/brief.json`
-(checks nav_model matches the directive, refs resolve, every directive `mandatory_flow` appears).
+Gate: `validate_flows.py {OUTPUT_DIR}/flows.json {OUTPUT_DIR}/intelligence.json {OUTPUT_DIR}/brief.json {OUTPUT_DIR}/scenario-edges.json`
+(checks nav_model matches the directive, refs resolve, every directive `mandatory_flow` appears; also enforces the 2.5b seam — every `scenario_edge` with `may_inject_flow.inject=true` and `severity=must` must land as a flow — plus primary `user_type` reverse coverage — every primary type with `role_category != "system"` must be referenced by ≥1 flow — and once any flow opts into `task_refs`, every `user`/`event`-triggered `core_task` must be referenced by ≥1 flow).
 
 ---
 
